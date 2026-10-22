@@ -55,6 +55,13 @@ export default function TerimaSetoranModal({
       nominalToSave = selectedNominal;
     }
 
+    if (nominalToSave > 50000) {
+      const yakin = window.confirm(
+        `Nominal ${formatRupiah(nominalToSave)} cukup besar. Apakah Anda yakin tidak salah ketik (kelebihan angka nol)?`
+      );
+      if (!yakin) return;
+    }
+
     setSaving(true);
     try {
       await onSave(rumah.id, nominalToSave);

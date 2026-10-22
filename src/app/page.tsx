@@ -1,194 +1,46 @@
 import { Suspense } from 'react';
-import Link from 'next/link';
 import { fetchRingkasanPublik } from '@/lib/data';
-import { formatRupiah, formatTanggalIndonesia } from '@/lib/saldo';
+import BerandaLive, { RingkasanPublikApiData } from '@/components/BerandaLive';
 
 async function BerandaContent() {
   const data = await fetchRingkasanPublik();
 
-  const persenSudahBayar = data.total_rumah > 0
-    ? Math.round((data.sudah_bayar_count / data.total_rumah) * 100)
-    : 0;
+  const initialApiData: RingkasanPublikApiData = {
+    sabtu: data.tanggal,
+    petugas: [data.petugas_1, data.petugas_2].filter(
+      (p) => p && p !== 'Belum diatur' && p !== '-'
+    ),
+    terkumpul: data.total_terkumpul,
+    sudah_bayar: data.sudah_bayar_count,
+    total_rumah: data.total_rumah,
+    blok: data.blok_ringkasan.map((b) => ({
+      blok: b.blok,
+      sudah: b.sudah_bayar,
+      total: b.total_rumah,
+      nunggak: b.nunggak,
+    })),
+  };
 
-  return (
-    <>
-      {/* Kartu Petugas Sabtu Ini */}
-      <section className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-sm flex flex-col gap-2.5">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-          <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-            Jadwal Sabtu Ini
-          </span>
-          <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">
-            {formatTanggalIndonesia(data.tanggal, false)}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-3 pt-1">
-          <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-lg shrink-0 shadow-sm">
-            👥
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium text-slate-400">Petugas Jaga</p>
-            <p className="text-base sm:text-lg font-bold text-slate-900 truncate">
-              {data.petugas_1} &amp; {data.petugas_2}
-            </p>
-          </div>
-        </div>
-
-        {data.catatan_jadwal && (
-          <p className="text-xs bg-amber-50 text-amber-800 px-3 py-2 rounded-lg font-medium mt-1">
-            ℹ️ {data.catatan_jadwal}
-          </p>
-        )}
-      </section>
-
-      {/* Ringkasan Utama: 2 Angka Besar */}
-      <section className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm flex flex-col gap-4">
-        <div className="grid grid-cols-2 gap-3 divide-x divide-slate-100">
-          {/* Terkumpul */}
-          <div className="pr-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-1">
-              Terkumpul
-            </span>
-            <p className="text-2xl sm:text-3xl font-extrabold text-emerald-600 tracking-tight">
-              {formatRupiah(data.total_terkumpul)}
-            </p>
-            <span className="text-xs text-slate-400 mt-1 block">
-              Sabtu ini
-            </span>
-          </div>
-
-          {/* Sudah Bayar */}
-          <div className="pl-4">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-1">
-              Sudah Bayar
-            </span>
-            <p className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-              {data.sudah_bayar_count} <span className="text-base sm:text-lg font-medium text-slate-400">/ {data.total_rumah}</span>
-            </p>
-            <span className="text-xs text-slate-400 mt-1 block">
-              {persenSudahBayar}% rumah
-            </span>
-          </div>
-        </div>
-
-        {/* Bar Progres */}
-        <div className="flex flex-col gap-1.5 pt-1">
-          <div className="w-full bg-slate-100 rounded-full h-3.5 overflow-hidden p-0.5">
-            <div
-              className="bg-emerald-500 h-full rounded-full transition-all duration-500"
-              style={{ width: `${Math.min(100, Math.max(0, persenSudahBayar))}%` }}
-            ></div>
-          </div>
-          <div className="flex justify-between items-center text-xs text-slate-500 font-medium px-0.5">
-            <span>Progres penerimaan</span>
-            <span className="font-bold text-slate-700">{persenSudahBayar}%</span>
-          </div>
-        </div>
-      </section>
-
-      {/* Ringkasan Per Blok */}
-      <section className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold uppercase tracking-wider text-slate-600">
-            Ringkasan Per Blok
-          </h2>
-          <span className="text-xs text-slate-400">Total 3 Blok</span>
-        </div>
-
-        <div className="flex flex-col gap-2.5">
-          {data.blok_ringkasan.map((b) => {
-            const isLunasSemua = b.nunggak === 0 && b.sudah_bayar === b.total_rumah;
-            return (
-              <div
-                key={b.blok}
-                className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-100"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-slate-800 text-white font-extrabold text-base flex items-center justify-center shrink-0">
-                    {b.blok}
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-slate-900">
-                      Blok {b.blok}
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      {b.sudah_bayar} dari {b.total_rumah} rumah bayar
-                    </p>
-                  </div>
-                </div>
-
-                <div>
-                  {b.nunggak > 0 ? (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-700">
-                      ⚠️ {b.nunggak} nunggak
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">
-                      ✓ {isLunasSemua ? 'Lengkap' : 'Lunas'}
-                    </span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-    </>
-  );
+  return <BerandaLive initialData={initialApiData} />;
 }
 
 function BerandaSkeleton() {
   return (
-    <div className="flex flex-col gap-5 animate-pulse">
-      <div className="h-28 bg-white rounded-2xl border border-slate-200"></div>
-      <div className="h-36 bg-white rounded-2xl border border-slate-200"></div>
-      <div className="h-44 bg-white rounded-2xl border border-slate-200"></div>
+    <div className="min-h-screen bg-slate-50 flex flex-col justify-between max-w-md mx-auto w-full shadow-lg border-x border-slate-200 p-4">
+      <div className="flex flex-col gap-5 animate-pulse mt-4">
+        <div className="h-20 bg-slate-200 rounded-2xl"></div>
+        <div className="h-28 bg-white rounded-2xl border border-slate-200"></div>
+        <div className="h-36 bg-white rounded-2xl border border-slate-200"></div>
+        <div className="h-44 bg-white rounded-2xl border border-slate-200"></div>
+      </div>
     </div>
   );
 }
 
 export default function BerandaPage() {
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col justify-between max-w-md mx-auto w-full shadow-lg border-x border-slate-200">
-      <main className="p-4 sm:p-5 flex-1 flex flex-col gap-5">
-        {/* Header RT */}
-        <header className="pt-2 pb-1 text-center">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-semibold uppercase tracking-wider mb-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            Pencatatan Live
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-            Jimpitan RT 23
-          </h1>
-          <p className="text-sm font-medium text-slate-500 mt-0.5">
-            RW 6 · Munggut Peni
-          </p>
-        </header>
-
-        {/* Dynamic content wrapped in Suspense */}
-        <Suspense fallback={<BerandaSkeleton />}>
-          <BerandaContent />
-        </Suspense>
-
-        {/* Informasi Iuran */}
-        <div className="text-center p-3 rounded-xl bg-slate-100/70 text-slate-500 text-xs font-medium">
-          Iuran rutin: <span className="font-bold text-slate-700">Rp2.000</span> per rumah per Sabtu
-        </div>
-      </main>
-
-      {/* Footer dengan Tautan Petugas */}
-      <footer className="p-4 border-t border-slate-200 bg-white text-center flex flex-col items-center gap-2">
-        <Link
-          href="/login"
-          className="inline-flex items-center justify-center gap-2 text-sm font-semibold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-5 py-3 rounded-xl transition w-full"
-        >
-          🔐 Masuk untuk Petugas
-        </Link>
-        <p className="text-[11px] text-slate-400">
-          Aplikasi Jimpitan Mandiri RT 23 RW 06 · Kelurahan Munggut
-        </p>
-      </footer>
-    </div>
+    <Suspense fallback={<BerandaSkeleton />}>
+      <BerandaContent />
+    </Suspense>
   );
 }

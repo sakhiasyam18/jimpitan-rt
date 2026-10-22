@@ -306,3 +306,124 @@ Versi pertama yang layak dipakai adalah langkah 1 sampai 5. Langkah 6 dan 7 bisa
 - Lebih dari 2 petugas per Sabtu.
 
 Bila kebutuhan di atas muncul kelak, tambahkan setelah versi dasar berjalan.
+## 16. Desain API
+ 
+API dibuat **setipis mungkin**. Tidak ada kumpulan endpoint untuk semua tabel.
+ 
+### 16.1 Prinsip
+ 
+| Hal | Pilihan | Alasan |
+|---|---|---|
+| Membaca data | Langsung di halaman (Server Components) | Tidak perlu endpoint terpisah, lebih cepat |
+| Mengubah data | Server Actions | Tidak ada pintu publik tambahan yang perlu diamankan |
+| Endpoint terbuka | Hanya **satu**: ringkasan publik | Supaya beranda warga bisa menyegarkan diri |
+| Penjaga utama | Row Level Security di Supabase | Kalau kode salah, database tetap menolak |
+| Hitungan saldo | **Satu sumber** di database (view/fungsi) | Angka di beranda warga dan layar petugas tidak mungkin berbeda |
+ 
+Beranda warga menyegarkan data **tiap 30 detik** (polling). Tidak memakai real-time, karena cukup untuk kebutuhan RT dan lebih ringan.
+ 
+### 16.2 Endpoint publik (tanpa login)
+ 
+`GET /api/publik/ringkasan` membaca dari fungsi `ringkasan_publik()`.
+ 
+```json
+{
+  "sabtu": "2026-10-24",
+  "petugas": ["Pak Heru", "Pak Agung"],
+  "terkumpul": 78000,
+  "sudah_bayar": 32,
+  "total_rumah": 51,
+  "blok": [
+    { "blok": "C0", "sudah": 18, "total": 29, "nunggak": 3 },
+    { "blok": "C1", "sudah": 2,  "total": 2,  "nunggak": 0 },
+    { "blok": "C2", "sudah": 12, "total": 20, "nunggak": 2 }
+  ]
+}
+```
+ 
+Tidak boleh ada nama warga atau nominal per rumah di respons ini.
+ 
+### 16.3 Aksi petugas (wajib login)
+ 
+| Aksi | Masukan | Hasil |
+|---|---|---|
+| `masuk` | nama, pin | Sesi petugas, arahkan ke `/petugas` |
+| `keluar` | tidak ada | Kembali ke `/login` |
+| Lihat daftar rumah | blok (opsional) | Daftar rumah + saldo + status Sabtu ini |
+| `simpanSetoran` | warga_id, tanggal, jumlah | Setoran tersimpan (upsert per tanggal + warga) |
+| Lihat jadwal | rentang tanggal | Baris Sabtu + 2 petugas |
+| `aturJadwal` | tanggal, petugas_1, petugas_2, catatan | Jadwal tersimpan |
+| `isiJadwalOtomatis` | tanggal_mulai, jumlah_minggu | Jadwal berputar berurutan, tetap bisa diubah |
+| `simpanWarga` | blok, no_rumah, nama | Tambah atau ubah warga |
+| `nonaktifkanWarga` | warga_id | Rumah tidak lagi dihitung |
+| `ubahPengaturan` | iuran, batas_langganan_nunggak | Tersimpan |
+ 
+"Batalkan setoran" tidak butuh aksi sendiri: cukup `simpanSetoran` dengan jumlah 0.
+ 
+### 16.4 Bentuk data daftar rumah
+ 
+Semua angka sudah dihitung di database. Aplikasi hanya menampilkan.
+ 
+```json
+{
+  "tanggal": "2026-10-24",
+  "rumah": [
+    {
+      "warga_id": "uuid",
+      "label": "C0/06 · LULUK",
+      "setoran_sabtu_ini": 0,
+      "saldo": -6000,
+      "minggu_nunggak": 3,
+      "langganan_nunggak": true
+    }
+  ]
+}
+```
+ 
+### 16.5 Aturan pemeriksaan input
+ 
+- Tanggal setoran dan jadwal **harus hari Sabtu**.
+- `jumlah` bilangan bulat, **>= 0**.
+- Jumlah di atas **Rp50.000** meminta konfirmasi dulu (menangkap salah ketik, mis. kelebihan nol). Batas ini boleh diubah.
+- Blok + nomor rumah tidak boleh kembar.
+- `petugas_1` dan `petugas_2` tidak boleh orang yang sama.
+- Rumah nonaktif tidak bisa diberi setoran baru.
+- Pemeriksaan dilakukan di server **dan** di database (constraint/RLS), bukan hanya di tampilan.
+### 16.6 Format kesalahan
+ 
+Satu bentuk untuk semua, dengan pesan bahasa Indonesia yang langsung bisa ditampilkan ke orang tua.
+ 
+```json
+{ "error": { "kode": "SABTU_SALAH", "pesan": "Tanggal harus hari Sabtu." } }
+```
+ 
+| Kode HTTP | Artinya |
+|---|---|
+| 401 | Belum masuk |
+| 403 | Akun tidak aktif atau tidak berhak |
+| 409 | Data kembar (mis. blok + nomor rumah sudah ada) |
+| 422 | Isian tidak valid |
+ 
+Pesan layar dibuat sangat singkat, contoh: "PIN salah, coba lagi", bukan istilah teknis.
+ 
+### 16.7 Keputusan perilaku (sudah disetujui)
+ 
+1. **Setelah simpan setoran:** kembali otomatis ke daftar rumah. Rumah tadi langsung berubah status dan tidak lagi muncul sebagai "belum", sehingga petugas bisa lanjut ke rumah berikutnya tanpa langkah tambahan.
+2. **Dua petugas mencatat rumah yang sama hampir bersamaan:** yang terakhir menimpa. `dicatat_oleh` dan `dicatat_pada` menunjukkan siapa yang terakhir mengubah. Tidak ada penguncian khusus.
+### 16.8 Letak kode yang disarankan
+ 
+```
+src/
+  app/
+    api/publik/ringkasan/route.ts   endpoint publik
+  actions/
+    setoran.ts                      simpanSetoran
+    jadwal.ts                       aturJadwal, isiJadwalOtomatis
+    warga.ts                        simpanWarga, nonaktifkanWarga
+    auth.ts                         masuk, keluar
+    pengaturan.ts                   ubahPengaturan
+  lib/
+    validasi.ts                     aturan pemeriksaan input (16.5)
+    galat.ts                        format kesalahan (16.6)
+```
+ 
