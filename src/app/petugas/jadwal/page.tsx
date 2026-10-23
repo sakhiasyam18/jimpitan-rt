@@ -1,299 +1,339 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { createClient } from '@/lib/supabase/client';
-import { INITIAL_WARGA } from '@/lib/mock-data';
-import { Warga, Jadwal } from '@/types/database';
+import React, { useState, useEffect } from 'react';
+import { createClient } from '@/lib/supabase/browser';
+import { AkunPetugasRow, JadwalRow } from '@/types';
 import {
-  formatTanggalIndonesia,
-  getSabtuTerkait,
-  toDateString,
-} from '@/lib/saldo';
+  lihatJadwal,
+  aturJadwal,
+  isiJadwalOtomatis,
+  daftarPetugasAktif,
+} from '@/actions/jadwal';
+import { formatTanggal } from '@/lib/format';
+import { getSabtuTerkait } from '@/lib/saldo';
+import TombolBesar from '@/components/TombolBesar';
+import KotakBerhasil from '@/components/KotakBerhasil';
+import KotakGalat from '@/components/KotakGalat';
 
-export default function JadwalJagaPage() {
-  const [jadwalList, setJadwalList] = useState<Jadwal[]>([]);
-  const [wargaList, setWargaList] = useState<Warga[]>(INITIAL_WARGA);
-  const [loading, setLoading] = useState(true);
-  const [savingId, setSavingId] = useState<string | null>(null);
-  const [notification, setNotification] = useState<string | null>(null);
+interface BarisSabtu {
+  tanggal: string;
+  petugas_1: string | null;
+  petugas_2: string | null;
+  catatan?: string | null;
+  memuatSimpan?: boolean;
+  galatBaris?: string | null;
+  suksesBaris?: boolean;
+}
 
-  // Load daftar jadwal & warga
-  useEffect(() => {
-    async function loadData() {
-      setLoading(true);
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+export default function JadwalPage() {
+  const [daftarSabtu, setDaftarSabtu] = useState<BarisSabtu[]>([]);
+  const [petugasList, setPetugasList] = useState<AkunPetugasRow[]>([]);
+  const [currentWargaId, setCurrentWargaId] = useState<string | null>(null);
+  const [memuatHalaman, setMemuatHalaman] = useState<boolean>(true);
+  const [galatHalaman, setGalatHalaman] = useState<string | null>(null);
+  const [pesanGlobal, setPesanGlobal] = useState<string | null>(null);
+  const [memuatOtomatis, setMemuatOtomatis] = useState<boolean>(false);
 
-      // Inisialisasi daftar 4 Sabtu ke depan
-      const sabtuIni = getSabtuTerkait();
-      const defaultJadwals: Jadwal[] = [];
-      const cur = new Date(sabtuIni);
+  // Ambil daftar 8 Sabtu ke depan
+  function hitung8Sabtu(): string[] {
+    const sabtuIni = getSabtuTerkait();
+    const [y, m, d] = sabtuIni.split('-').map(Number);
+    const startDate = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
 
-      for (let i = 0; i < 5; i++) {
-        const d = new Date(cur);
-        d.setDate(d.getDate() + i * 7);
-        const tglStr = toDateString(d);
-        defaultJadwals.push({
-          id: `local-jadwal-${i}`,
-          tanggal: tglStr,
-          petugas_1: i === 0 ? 'c2-07' : null,
-          petugas_2: i === 0 ? 'c2-02' : null,
-          catatan: i === 0 ? 'Jaga mulai 19.30' : null,
-        });
+    const list: string[] = [];
+    for (let i = 0; i < 8; i++) {
+      const cur = new Date(startDate);
+      cur.setUTCDate(cur.getUTCDate() + i * 7);
+      list.push(cur.toISOString().split('T')[0]);
+    }
+    return list;
+  }
+
+  async function muatData() {
+    setMemuatHalaman(true);
+    setGalatHalaman(null);
+
+    try {
+      // 1. Ambil info user yang sedang login untuk tanda (Anda)
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (user) {
+        const { data: akunSaya } = await supabase
+          .from('akun_petugas')
+          .select('warga_id')
+          .eq('user_id', user.id)
+          .single();
+        if (akunSaya?.warga_id) {
+          setCurrentWargaId(akunSaya.warga_id);
+        }
       }
 
-      if (!supabaseUrl || !supabaseKey) {
-        setJadwalList(defaultJadwals);
-        setWargaList(INITIAL_WARGA);
-        setLoading(false);
+      // 2. Ambil daftar petugas aktif
+      const hasilPetugas = await daftarPetugasAktif();
+      if (!hasilPetugas.ok) {
+        setGalatHalaman(hasilPetugas.error.pesan);
+        setMemuatHalaman(false);
+        return;
+      }
+      setPetugasList(hasilPetugas.data);
+
+      // 3. Ambil jadwal 8 Sabtu
+      const delapanSabtu = hitung8Sabtu();
+      const tglAwal = delapanSabtu[0];
+      const tglAkhir = delapanSabtu[delapanSabtu.length - 1];
+
+      const hasilJadwal = await lihatJadwal(tglAwal, tglAkhir);
+      if (!hasilJadwal.ok) {
+        setGalatHalaman(hasilJadwal.error.pesan);
+        setMemuatHalaman(false);
         return;
       }
 
-      try {
-        const supabase = createClient();
-        const { data: dbWarga } = await supabase
-          .from('warga')
-          .select('*')
-          .eq('aktif', true)
-          .order('nama');
+      const jadwalMap = new Map<string, JadwalRow>();
+      hasilJadwal.data.forEach((j) => {
+        jadwalMap.set(j.tanggal, j);
+      });
 
-        if (dbWarga && dbWarga.length > 0) {
-          setWargaList(dbWarga);
-        }
-
-        const { data: dbJadwal } = await supabase
-          .from('jadwal')
-          .select('*')
-          .gte('tanggal', sabtuIni)
-          .order('tanggal', { ascending: true })
-          .limit(10);
-
-        if (dbJadwal && dbJadwal.length > 0) {
-          // Gabungkan jadwal yang ada dengan minggu berikutnya jika masih kosong
-          const combined = [...dbJadwal];
-          defaultJadwals.forEach((dj) => {
-            if (!combined.some((j) => j.tanggal === dj.tanggal)) {
-              combined.push(dj);
-            }
-          });
-          combined.sort((a, b) => a.tanggal.localeCompare(b.tanggal));
-          setJadwalList(combined);
-        } else {
-          setJadwalList(defaultJadwals);
-        }
-      } catch (err) {
-        console.error('Error memuat jadwal:', err);
-        setJadwalList(defaultJadwals);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    loadData();
-  }, []);
-
-  async function handleSimpanBaris(j: Jadwal) {
-    setSavingId(j.tanggal);
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-    if (supabaseUrl && supabaseKey) {
-      try {
-        const supabase = createClient();
-        const payload = {
-          tanggal: j.tanggal,
-          petugas_1: j.petugas_1,
-          petugas_2: j.petugas_2,
-          catatan: j.catatan,
+      // Susun 8 baris (Sabtu tanpa isi tetap ditampilkan sebagai baris kosong)
+      const barisGabungan: BarisSabtu[] = delapanSabtu.map((tgl) => {
+        const ada = jadwalMap.get(tgl);
+        return {
+          tanggal: tgl,
+          petugas_1: ada?.petugas_1 || null,
+          petugas_2: ada?.petugas_2 || null,
+          catatan: ada?.catatan || null,
         };
+      });
 
-        const { error } = await supabase
-          .from('jadwal')
-          .upsert(payload, { onConflict: 'tanggal' });
-
-        if (error) {
-          alert('Gagal menyimpan jadwal: ' + error.message);
-          return;
-        }
-      } catch (err) {
-        console.error(err);
-      }
+      setDaftarSabtu(barisGabungan);
+    } catch (err) {
+      console.error(err);
+      setGalatHalaman('Gagal memuat jadwal.');
+    } finally {
+      setMemuatHalaman(false);
     }
-
-    setNotification(`Jadwal tanggal ${formatTanggalIndonesia(j.tanggal, false)} tersimpan!`);
-    setTimeout(() => setNotification(null), 3000);
-    setSavingId(null);
   }
 
-  function updateJadwalItem(tanggal: string, field: keyof Jadwal, value: string | null) {
-    setJadwalList((prev) =>
-      prev.map((item) => {
-        if (item.tanggal === tanggal) {
-          return { ...item, [field]: value };
+  useEffect(() => {
+    muatData();
+  }, []);
+
+  function handleUbahPetugas(
+    tanggal: string,
+    kolom: 'petugas_1' | 'petugas_2',
+    val: string | null
+  ) {
+    setDaftarSabtu((prev) =>
+      prev.map((b) => {
+        if (b.tanggal !== tanggal) return b;
+        const updated = { ...b, [kolom]: val || null, galatBaris: null };
+        // Validasi instan petugas sama
+        if (updated.petugas_1 && updated.petugas_2 && updated.petugas_1 === updated.petugas_2) {
+          updated.galatBaris = 'Dua petugas harus orang berbeda.';
         }
-        return item;
+        return updated;
       })
     );
   }
 
+  async function handleSimpanBaris(baris: BarisSabtu) {
+    if (baris.petugas_1 && baris.petugas_2 && baris.petugas_1 === baris.petugas_2) {
+      setDaftarSabtu((prev) =>
+        prev.map((b) =>
+          b.tanggal === baris.tanggal
+            ? { ...b, galatBaris: 'Dua petugas harus orang berbeda.' }
+            : b
+        )
+      );
+      return;
+    }
+
+    setDaftarSabtu((prev) =>
+      prev.map((b) => (b.tanggal === baris.tanggal ? { ...b, memuatSimpan: true, galatBaris: null } : b))
+    );
+
+    const hasil = await aturJadwal({
+      tanggal: baris.tanggal,
+      petugas_1: baris.petugas_1,
+      petugas_2: baris.petugas_2,
+      catatan: baris.catatan,
+    });
+
+    if (hasil.ok) {
+      setDaftarSabtu((prev) =>
+        prev.map((b) =>
+          b.tanggal === baris.tanggal
+            ? { ...b, memuatSimpan: false, suksesBaris: true, galatBaris: null }
+            : b
+        )
+      );
+      setTimeout(() => {
+        setDaftarSabtu((prev) =>
+          prev.map((b) => (b.tanggal === baris.tanggal ? { ...b, suksesBaris: false } : b))
+        );
+      }, 2000);
+    } else {
+      setDaftarSabtu((prev) =>
+        prev.map((b) =>
+          b.tanggal === baris.tanggal
+            ? { ...b, memuatSimpan: false, galatBaris: hasil.error.pesan }
+            : b
+        )
+      );
+    }
+  }
+
+  async function handleIsiOtomatis() {
+    const yakin = window.confirm(
+      'Mengisi Sabtu yang masih kosong. Yang sudah terisi tidak diubah.'
+    );
+    if (!yakin) return;
+
+    const delapan = hitung8Sabtu();
+    const sabtuAwal = delapan[0];
+
+    setMemuatOtomatis(true);
+    const hasil = await isiJadwalOtomatis({
+      tanggal_mulai: sabtuAwal,
+      jumlah_minggu: 4,
+    });
+    setMemuatOtomatis(false);
+
+    if (hasil.ok) {
+      setPesanGlobal(`Berhasil mengisi ${hasil.data.jumlah_diisi} Sabtu otomatis.`);
+      setTimeout(() => setPesanGlobal(null), 3000);
+      muatData();
+    } else {
+      alert(hasil.error.pesan);
+    }
+  }
+
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col max-w-md mx-auto w-full border-x border-slate-300 pb-16 shadow-xl">
-      {/* Header */}
-      <header className="bg-slate-900 text-white p-4 sm:p-5 sticky top-0 z-30 shadow-md">
-        <div className="flex items-center justify-between gap-2">
-          <div>
-            <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-400">
-              Pengaturan RT 23
-            </span>
-            <h1 className="text-xl font-black truncate mt-0.5">
-              📅 Jadwal Jaga Sabtu
-            </h1>
+    <div className="p-4 flex flex-col gap-4">
+      {/* Judul & Tombol Isi Otomatis */}
+      <section className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col gap-3">
+        <h1 className="text-[24px] sm:text-[26px] font-black text-slate-950 tracking-tight">
+          Jadwal Jaga
+        </h1>
+        <p className="text-[15px] font-medium text-slate-500">
+          Atur 2 orang petugas jaga per Sabtu
+        </p>
+
+        <TombolBesar
+          variant="sekunder"
+          memuat={memuatOtomatis}
+          onClick={handleIsiOtomatis}
+        >
+          Isi 4 minggu otomatis
+        </TombolBesar>
+      </section>
+
+      {pesanGlobal && <KotakBerhasil pesan={pesanGlobal} />}
+      {galatHalaman && <KotakGalat pesan={galatHalaman} onCobaLagi={muatData} />}
+
+      {/* Daftar Kartu Sabtu */}
+      <main className="flex flex-col gap-3.5">
+        {memuatHalaman ? (
+          <div className="p-12 text-center text-slate-600 font-bold text-[20px]">
+            Memuat...
           </div>
-          <Link
-            href="/petugas"
-            className="text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white px-3 py-2 rounded-xl transition"
-          >
-            ← Kembali
-          </Link>
-        </div>
-
-        {/* Menu Navigasi Petugas */}
-        <div className="grid grid-cols-3 gap-2 mt-4 pt-2 border-t border-slate-800 text-center text-xs font-bold">
-          <Link
-            href="/petugas"
-            className="py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
-          >
-            📋 Setoran
-          </Link>
-          <Link
-            href="/petugas/jadwal"
-            className="py-2 rounded-xl bg-emerald-600 text-white shadow-xs"
-          >
-            📅 Jadwal Jaga
-          </Link>
-          <Link
-            href="/petugas/warga"
-            className="py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
-          >
-            🏠 Data Warga
-          </Link>
-        </div>
-      </header>
-
-      {/* Notifikasi */}
-      {notification && (
-        <div className="m-4 p-3 bg-emerald-600 text-white rounded-xl font-bold text-sm text-center shadow-md animate-in fade-in">
-          ✓ {notification}
-        </div>
-      )}
-
-      {/* Konten Jadwal */}
-      <main className="p-4 flex flex-col gap-4">
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 text-xs text-slate-500 font-medium">
-          💡 Setiap hari Sabtu dijadwalkan <span className="font-bold text-slate-800">2 orang petugas jaga</span> untuk mengambil dan mencatat jimpitan keliling.
-        </div>
-
-        {loading ? (
-          <div className="p-8 text-center text-slate-400 font-bold">
-            <span className="inline-block w-6 h-6 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin mb-2"></span>
-            <p>Memuat jadwal...</p>
+        ) : daftarSabtu.length === 0 ? (
+          <div className="p-12 text-center text-slate-500 font-semibold text-[17px] bg-white rounded-2xl border border-slate-200">
+            Belum ada jadwal.
           </div>
         ) : (
-          jadwalList.map((j, idx) => {
-            const isSaving = savingId === j.tanggal;
-            const isSabtuPertama = idx === 0;
+          daftarSabtu.map((baris, idx) => {
+            const tglFormatted = formatTanggal(baris.tanggal, 'hari');
 
             return (
               <div
-                key={j.tanggal}
-                className={`bg-white rounded-2xl p-4 sm:p-5 border shadow-xs flex flex-col gap-3 ${
-                  isSabtuPertama
-                    ? 'border-emerald-300 ring-2 ring-emerald-100'
-                    : 'border-slate-200'
-                }`}
+                key={baris.tanggal}
+                className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col gap-3.5"
               >
-                {/* Tanggal Sabtu */}
-                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base font-black text-slate-900">
-                      {formatTanggalIndonesia(j.tanggal)}
+                {/* Tanggal Besar */}
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <h2 className="text-[20px] sm:text-[22px] font-black text-slate-900">
+                    {tglFormatted}
+                  </h2>
+                  {idx === 0 && (
+                    <span className="text-[13px] font-bold text-blue-900 bg-blue-50 px-2.5 py-0.5 rounded-lg border border-blue-200">
+                      Terdekat
                     </span>
-                    {isSabtuPertama && (
-                      <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-600 text-white px-2 py-0.5 rounded-md">
-                        Sabtu Terdekat
-                      </span>
-                    )}
-                  </div>
+                  )}
                 </div>
 
+                {baris.galatBaris && <KotakGalat pesan={baris.galatBaris} />}
+                {baris.suksesBaris && <KotakBerhasil pesan="Jadwal Tersimpan" />}
+
                 {/* Petugas 1 */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1">
+                <div className="flex flex-col gap-1.5">
+                  <label
+                    htmlFor={`p1-${baris.tanggal}`}
+                    className="text-[14px] font-bold uppercase tracking-wider text-slate-700"
+                  >
                     Petugas 1:
                   </label>
                   <select
-                    value={j.petugas_1 || ''}
+                    id={`p1-${baris.tanggal}`}
+                    value={baris.petugas_1 || ''}
                     onChange={(e) =>
-                      updateJadwalItem(j.tanggal, 'petugas_1', e.target.value || null)
+                      handleUbahPetugas(baris.tanggal, 'petugas_1', e.target.value || null)
                     }
-                    className="w-full h-12 px-3 text-base font-semibold bg-slate-50 border border-slate-300 rounded-xl focus:border-emerald-500 focus:bg-white focus:outline-none"
+                    className="w-full min-h-[56px] px-3.5 text-[18px] font-bold text-slate-900 bg-slate-50 border-2 border-slate-300 rounded-2xl focus:border-blue-950 focus:bg-white focus:outline-none"
                   >
                     <option value="">-- Pilih Petugas 1 --</option>
-                    {wargaList.map((w) => (
-                      <option key={w.id} value={w.id}>
-                        {w.nama} ({w.blok}/{w.no_rumah})
-                      </option>
-                    ))}
+                    {petugasList.map((p) => {
+                      const isSaya = p.warga_id === currentWargaId;
+                      return (
+                        <option key={p.user_id} value={p.warga_id || ''}>
+                          {p.nama} {isSaya ? '(Anda)' : ''}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
 
                 {/* Petugas 2 */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1">
+                <div className="flex flex-col gap-1.5">
+                  <label
+                    htmlFor={`p2-${baris.tanggal}`}
+                    className="text-[14px] font-bold uppercase tracking-wider text-slate-700"
+                  >
                     Petugas 2:
                   </label>
                   <select
-                    value={j.petugas_2 || ''}
+                    id={`p2-${baris.tanggal}`}
+                    value={baris.petugas_2 || ''}
                     onChange={(e) =>
-                      updateJadwalItem(j.tanggal, 'petugas_2', e.target.value || null)
+                      handleUbahPetugas(baris.tanggal, 'petugas_2', e.target.value || null)
                     }
-                    className="w-full h-12 px-3 text-base font-semibold bg-slate-50 border border-slate-300 rounded-xl focus:border-emerald-500 focus:bg-white focus:outline-none"
+                    className="w-full min-h-[56px] px-3.5 text-[18px] font-bold text-slate-900 bg-slate-50 border-2 border-slate-300 rounded-2xl focus:border-blue-950 focus:bg-white focus:outline-none"
                   >
                     <option value="">-- Pilih Petugas 2 --</option>
-                    {wargaList.map((w) => (
-                      <option key={w.id} value={w.id}>
-                        {w.nama} ({w.blok}/{w.no_rumah})
-                      </option>
-                    ))}
+                    {petugasList.map((p) => {
+                      const isSaya = p.warga_id === currentWargaId;
+                      return (
+                        <option key={p.user_id} value={p.warga_id || ''}>
+                          {p.nama} {isSaya ? '(Anda)' : ''}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
 
-                {/* Catatan Opsional */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1">
-                    Catatan (Opsional):
-                  </label>
-                  <input
-                    type="text"
-                    value={j.catatan || ''}
-                    onChange={(e) =>
-                      updateJadwalItem(j.tanggal, 'catatan', e.target.value || null)
-                    }
-                    placeholder="Contoh: Mulai pukul 19.30 WIB"
-                    className="w-full h-10 px-3 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:border-emerald-500 focus:bg-white focus:outline-none"
-                  />
+                {/* Tombol Simpan Per Kartu */}
+                <div className="pt-1">
+                  <TombolBesar
+                    variant="utama"
+                    memuat={baris.memuatSimpan}
+                    onClick={() => handleSimpanBaris(baris)}
+                  >
+                    Simpan
+                  </TombolBesar>
                 </div>
-
-                {/* Tombol Simpan Baris */}
-                <button
-                  type="button"
-                  onClick={() => handleSimpanBaris(j)}
-                  disabled={isSaving}
-                  className="mt-1 w-full h-12 bg-slate-900 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                >
-                  {isSaving ? 'Menyimpan...' : '✓ Simpan Jadwal Ini'}
-                </button>
               </div>
             );
           })

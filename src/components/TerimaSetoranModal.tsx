@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { RumahWithStatus } from '@/types/database';
-import { formatRupiah, getLabelRumah } from '@/lib/saldo';
+import { VSaldoWarga } from '@/types';
+import { formatRupiah } from '@/lib/saldo';
 
 interface TerimaSetoranModalProps {
-  rumah: RumahWithStatus | null;
+  rumah: VSaldoWarga | null;
   isOpen: boolean;
   onClose: () => void;
   onSave: (wargaId: string, nominal: number) => Promise<void>;
@@ -64,7 +64,7 @@ export default function TerimaSetoranModal({
 
     setSaving(true);
     try {
-      await onSave(rumah.id, nominalToSave);
+      await onSave(rumah.warga_id, nominalToSave);
       onClose();
     } finally {
       setSaving(false);
@@ -90,7 +90,7 @@ export default function TerimaSetoranModal({
               Input Setoran Jimpitan
             </span>
             <h2 className="text-2xl font-black tracking-tight truncate mt-0.5">
-              {getLabelRumah(rumah)}
+              {rumah.label}
             </h2>
           </div>
           <button

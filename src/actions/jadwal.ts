@@ -1,27 +1,99 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import { validasiHariSabtu, validasiPetugasJadwal } from '@/lib/validasi';
-import { buatGalat, GalatApp } from '@/lib/galat';
+import { gagal, sukses, terjemahkanGalat } from '@/lib/galat';
+import { adalahSabtu } from '@/lib/validasi';
+import { AkunPetugasRow, Hasil, JadwalRow } from '@/types';
 import { revalidatePath } from 'next/cache';
 
-export interface AturJadwalInput {
-  tanggal: string; // YYYY-MM-DD
-  petugas_1: string | null;
-  petugas_2: string | null;
+export async function lihatJadwal(dari: string, sampai: string): Promise<Hasil<JadwalRow[]>> {
+  try {
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return gagal('BELUM_MASUK', 'Silakan masuk dulu.');
+    }
+
+    const { data, error } = await supabase
+      .from('jadwal')
+      .select(`
+        id,
+        tanggal,
+        petugas_1,
+        petugas_2,
+        catatan,
+        w1:warga!jadwal_petugas_1_fkey ( nama ),
+        w2:warga!jadwal_petugas_2_fkey ( nama )
+      `)
+      .gte('tanggal', dari)
+      .lte('tanggal', sampai)
+      .order('tanggal', { ascending: true });
+
+    if (error) {
+      // Jika foreign key name berbeda, fallback ke query dengan join standar
+      const { data: fallbackData, error: fallbackErr } = await supabase
+        .from('jadwal')
+        .select(`
+          id,
+          tanggal,
+          petugas_1,
+          petugas_2,
+          catatan,
+          w1:petugas_1 ( nama ),
+          w2:petugas_2 ( nama )
+        `)
+        .gte('tanggal', dari)
+        .lte('tanggal', sampai)
+        .order('tanggal', { ascending: true });
+
+      if (fallbackErr) {
+        const terjemahan = terjemahkanGalat(fallbackErr);
+        return gagal(terjemahan.kode, terjemahan.pesan);
+      }
+
+      const rows = (fallbackData || []).map((j: any) => ({
+        id: j.id,
+        tanggal: j.tanggal,
+        petugas_1: j.petugas_1,
+        petugas_2: j.petugas_2,
+        catatan: j.catatan,
+        petugas_1_nama: j.w1?.nama || null,
+        petugas_2_nama: j.w2?.nama || null,
+      }));
+
+      return sukses(rows);
+    }
+
+    const rows: JadwalRow[] = (data || []).map((j: any) => ({
+      id: j.id,
+      tanggal: j.tanggal,
+      petugas_1: j.petugas_1,
+      petugas_2: j.petugas_2,
+      catatan: j.catatan,
+      petugas_1_nama: j.w1?.nama || null,
+      petugas_2_nama: j.w2?.nama || null,
+    }));
+
+    return sukses(rows);
+  } catch (err: unknown) {
+    const terjemahan = terjemahkanGalat(err);
+    return gagal(terjemahan.kode, terjemahan.pesan);
+  }
+}
+
+export interface AturJadwalParams {
+  tanggal: string;
+  petugas_1: string;
+  petugas_2: string;
   catatan?: string | null;
 }
 
-export async function aturJadwal(
-  input: AturJadwalInput
-): Promise<{ success: boolean; data?: unknown } | GalatApp> {
-  const { tanggal, petugas_1, petugas_2, catatan } = input;
-
-  const galatSabtu = validasiHariSabtu(tanggal);
-  if (galatSabtu) return galatSabtu;
-
-  const galatPetugas = validasiPetugasJadwal(petugas_1, petugas_2);
-  if (galatPetugas) return galatPetugas;
+export async function aturJadwal(params: AturJadwalParams): Promise<Hasil<null>> {
+  const { tanggal, petugas_1, petugas_2, catatan } = params;
 
   try {
     const supabase = await createClient();
@@ -31,102 +103,184 @@ export async function aturJadwal(
     } = await supabase.auth.getUser();
 
     if (!user) {
-      return buatGalat('BELUM_LOGIN', 'Silakan masuk terlebih dahulu.');
+      return gagal('BELUM_MASUK', 'Silakan masuk dulu.');
     }
 
-    const { data, error } = await supabase
+    if (!adalahSabtu(tanggal)) {
+      return gagal('SABTU_SALAH', 'Tanggal harus hari Sabtu.');
+    }
+
+    if (petugas_1 && petugas_2 && petugas_1 === petugas_2) {
+      return gagal('PETUGAS_SAMA', 'Dua petugas harus orang berbeda.');
+    }
+
+    const { error } = await supabase
       .from('jadwal')
       .upsert(
         {
           tanggal,
-          petugas_1: petugas_1 || null,
-          petugas_2: petugas_2 || null,
+          petugas_1,
+          petugas_2,
           catatan: catatan || null,
         },
         {
           onConflict: 'tanggal',
         }
-      )
-      .select()
-      .single();
+      );
 
     if (error) {
-      return buatGalat('GAGAL_SERVER', 'Gagal menyimpan jadwal: ' + error.message);
+      const terjemahan = terjemahkanGalat(error);
+      return gagal(terjemahan.kode, terjemahan.pesan);
     }
 
     revalidatePath('/petugas/jadwal');
     revalidatePath('/');
 
-    return { success: true, data };
+    return sukses(null);
   } catch (err: unknown) {
-    console.error('Exception aturJadwal:', err);
-    return buatGalat('GAGAL_SERVER', 'Terjadi kesalahan sistem saat menyimpan jadwal.');
+    const terjemahan = terjemahkanGalat(err);
+    return gagal(terjemahan.kode, terjemahan.pesan);
   }
 }
 
-export async function isiJadwalOtomatis(input: {
+export interface IsiJadwalOtomatisParams {
   tanggal_mulai: string;
   jumlah_minggu: number;
-}): Promise<{ success: boolean; jumlahDiisi: number } | GalatApp> {
-  const { tanggal_mulai, jumlah_minggu } = input;
+}
 
-  const galatSabtu = validasiHariSabtu(tanggal_mulai);
-  if (galatSabtu) return galatSabtu;
-
-  if (jumlah_minggu < 1 || jumlah_minggu > 52) {
-    return buatGalat('ISIAN_TIDAK_VALID', 'Jumlah minggu harus antara 1 sampai 52.');
-  }
+export async function isiJadwalOtomatis(params: IsiJadwalOtomatisParams): Promise<Hasil<{ jumlah_diisi: number }>> {
+  const { tanggal_mulai, jumlah_minggu } = params;
 
   try {
     const supabase = await createClient();
 
-    // Ambil daftar petugas/warga aktif
-    const { data: wargaList } = await supabase
-      .from('warga')
-      .select('id')
-      .eq('aktif', true)
-      .order('blok')
-      .order('no_rumah');
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-    if (!wargaList || wargaList.length < 2) {
-      return buatGalat('ISIAN_TIDAK_VALID', 'Dibutuhkan minimal 2 warga aktif untuk membuat jadwal bergilir.');
+    if (!user) {
+      return gagal('BELUM_MASUK', 'Silakan masuk dulu.');
     }
 
-    const cur = new Date(tanggal_mulai);
-    const rowsToUpsert = [];
+    if (!adalahSabtu(tanggal_mulai)) {
+      return gagal('SABTU_SALAH', 'Tanggal harus hari Sabtu.');
+    }
+
+    if (jumlah_minggu < 1 || jumlah_minggu > 12) {
+      return gagal('GALAT_UMUM', 'Jumlah minggu otomatis maksimal 12 minggu.');
+    }
+
+    // Ambil daftar petugas aktif dari akun_petugas urut nama
+    const { data: petugasList, error: pErr } = await supabase
+      .from('akun_petugas')
+      .select('warga_id, nama')
+      .eq('aktif', true)
+      .not('warga_id', 'is', null)
+      .order('nama', { ascending: true });
+
+    if (pErr) {
+      const terjemahan = terjemahkanGalat(pErr);
+      return gagal(terjemahan.kode, terjemahan.pesan);
+    }
+
+    if (!petugasList || petugasList.length < 2) {
+      return gagal('PETUGAS_KURANG', 'Petugas aktif belum cukup.');
+    }
+
+    // Hitung tanggal-tanggal Sabtu yang akan diisi
+    const [startY, startM, startD] = tanggal_mulai.split('-').map(Number);
+    const startDate = new Date(Date.UTC(startY, startM - 1, startD, 12, 0, 0));
+
+    const tanggalList: string[] = [];
+    for (let i = 0; i < jumlah_minggu; i++) {
+      const d = new Date(startDate);
+      d.setUTCDate(d.getUTCDate() + i * 7);
+      const iso = d.toISOString().split('T')[0];
+      tanggalList.push(iso);
+    }
+
+    // Ambil jadwal yang sudah ada dalam rentang ini untuk DILEWATI
+    const { data: existingJadwal, error: existErr } = await supabase
+      .from('jadwal')
+      .select('tanggal')
+      .in('tanggal', tanggalList);
+
+    if (existErr) {
+      const terjemahan = terjemahkanGalat(existErr);
+      return gagal(terjemahan.kode, terjemahan.pesan);
+    }
+
+    const existingSet = new Set((existingJadwal || []).map((j) => j.tanggal));
+
+    // Bentuk pasangan berurutan memutar
+    const rowsToInsert = [];
     let pIdx = 0;
 
-    for (let i = 0; i < jumlah_minggu; i++) {
-      const d = new Date(cur);
-      d.setDate(d.getDate() + i * 7);
-      const tglStr = d.toISOString().split('T')[0];
+    for (const tgl of tanggalList) {
+      // Lewati Sabtu yang sudah ada isinya
+      if (existingSet.has(tgl)) {
+        continue;
+      }
 
-      const p1 = wargaList[pIdx % wargaList.length].id;
-      const p2 = wargaList[(pIdx + 1) % wargaList.length].id;
-      pIdx = (pIdx + 2) % wargaList.length;
+      const p1 = petugasList[pIdx % petugasList.length].warga_id!;
+      const p2 = petugasList[(pIdx + 1) % petugasList.length].warga_id!;
+      pIdx = (pIdx + 2) % petugasList.length;
 
-      rowsToUpsert.push({
-        tanggal: tglStr,
+      rowsToInsert.push({
+        tanggal: tgl,
         petugas_1: p1,
         petugas_2: p2,
         catatan: 'Jadwal putaran rutin',
       });
     }
 
-    const { error } = await supabase
-      .from('jadwal')
-      .upsert(rowsToUpsert, { onConflict: 'tanggal' });
+    if (rowsToInsert.length > 0) {
+      const { error: insertErr } = await supabase
+        .from('jadwal')
+        .insert(rowsToInsert);
 
-    if (error) {
-      return buatGalat('GAGAL_SERVER', 'Gagal mengisi jadwal otomatis: ' + error.message);
+      if (insertErr) {
+        const terjemahan = terjemahkanGalat(insertErr);
+        return gagal(terjemahan.kode, terjemahan.pesan);
+      }
     }
 
     revalidatePath('/petugas/jadwal');
     revalidatePath('/');
 
-    return { success: true, jumlahDiisi: rowsToUpsert.length };
+    return sukses({ jumlah_diisi: rowsToInsert.length });
   } catch (err: unknown) {
-    console.error('Exception isiJadwalOtomatis:', err);
-    return buatGalat('GAGAL_SERVER', 'Terjadi kesalahan sistem.');
+    const terjemahan = terjemahkanGalat(err);
+    return gagal(terjemahan.kode, terjemahan.pesan);
+  }
+}
+
+export async function daftarPetugasAktif(): Promise<Hasil<AkunPetugasRow[]>> {
+  try {
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return gagal('BELUM_MASUK', 'Silakan masuk dulu.');
+    }
+
+    const { data, error } = await supabase
+      .from('akun_petugas')
+      .select('user_id, warga_id, nama, aktif')
+      .eq('aktif', true)
+      .order('nama', { ascending: true });
+
+    if (error) {
+      const terjemahan = terjemahkanGalat(error);
+      return gagal(terjemahan.kode, terjemahan.pesan);
+    }
+
+    return sukses((data || []) as AkunPetugasRow[]);
+  } catch (err: unknown) {
+    const terjemahan = terjemahkanGalat(err);
+    return gagal(terjemahan.kode, terjemahan.pesan);
   }
 }

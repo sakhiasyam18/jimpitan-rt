@@ -1,26 +1,22 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import { namaToInternalEmail } from '@/lib/saldo';
-import { buatGalat, GalatApp } from '@/lib/galat';
-import { redirect } from 'next/navigation';
+import { EMAIL_DOMAIN } from '@/lib/konstanta';
+import { gagal, sukses } from '@/lib/galat';
+import { Hasil } from '@/types';
 
-export async function masuk(formData: { nama: string; pin: string }): Promise<{ success: boolean } | GalatApp> {
-  const { nama, pin } = formData;
-  const cleanNama = nama.trim();
-  const cleanPin = pin.trim();
+export async function masuk(nama: string, pin: string): Promise<Hasil<null>> {
+  const cleanNama = (nama || '').trim().toLowerCase().replace(/\s+/g, '.');
+  const cleanPin = (pin || '').trim();
 
-  if (!cleanNama) {
-    return buatGalat('ISIAN_TIDAK_VALID', 'Nama petugas wajib diisi.');
+  if (!cleanNama || !cleanPin) {
+    return gagal('LOGIN_GAGAL', 'Nama atau PIN salah.');
   }
 
-  if (cleanPin.length < 6) {
-    return buatGalat('ISIAN_TIDAK_VALID', 'PIN harus 6 angka.');
-  }
+  const email = `${cleanNama}@${EMAIL_DOMAIN}`;
 
   try {
     const supabase = await createClient();
-    const email = namaToInternalEmail(cleanNama);
 
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
@@ -28,30 +24,35 @@ export async function masuk(formData: { nama: string; pin: string }): Promise<{ 
     });
 
     if (error || !data.user) {
-      return buatGalat('TIDAK_BERHAK', 'Nama atau PIN salah, coba lagi.');
+      return gagal('LOGIN_GAGAL', 'Nama atau PIN salah.');
     }
 
-    // Periksa apakah petugas aktif di akun_petugas
-    const { data: akun } = await supabase
+    // Periksa status aktif di tabel akun_petugas
+    const { data: akun, error: akunErr } = await supabase
       .from('akun_petugas')
       .select('aktif')
       .eq('user_id', data.user.id)
       .single();
 
-    if (akun && !akun.aktif) {
+    if (akunErr || !akun || !akun.aktif) {
       await supabase.auth.signOut();
-      return buatGalat('TIDAK_BERHAK', 'Akun petugas Anda sedang dinonaktifkan.');
+      return gagal('TIDAK_BERHAK', 'Akun ini tidak boleh melakukan ini.');
     }
 
-    return { success: true };
+    return sukses(null);
   } catch (err: unknown) {
     console.error('Error action masuk:', err);
-    return buatGalat('GAGAL_SERVER', 'Terjadi kesalahan sistem saat masuk.');
+    return gagal('LOGIN_GAGAL', 'Nama atau PIN salah.');
   }
 }
 
-export async function keluar() {
-  const supabase = await createClient();
-  await supabase.auth.signOut();
-  redirect('/login');
+export async function keluar(): Promise<Hasil<null>> {
+  try {
+    const supabase = await createClient();
+    await supabase.auth.signOut();
+    return sukses(null);
+  } catch (err: unknown) {
+    console.error('Error action keluar:', err);
+    return gagal('GALAT_UMUM', 'Ada masalah. Coba lagi sebentar.');
+  }
 }

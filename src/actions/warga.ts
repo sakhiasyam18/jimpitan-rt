@@ -1,33 +1,60 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import { buatGalat, GalatApp } from '@/lib/galat';
+import { gagal, sukses, terjemahkanGalat } from '@/lib/galat';
+import { Hasil, WargaRow } from '@/types';
 import { revalidatePath } from 'next/cache';
 
-export interface SimpanWargaInput {
+export async function daftarWarga(options?: { termasukNonaktif?: boolean }): Promise<Hasil<WargaRow[]>> {
+  try {
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return gagal('BELUM_MASUK', 'Silakan masuk dulu.');
+    }
+
+    let query = supabase.from('warga').select('*');
+
+    if (!options?.termasukNonaktif) {
+      query = query.eq('aktif', true);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      const terjemahan = terjemahkanGalat(error);
+      return gagal(terjemahan.kode, terjemahan.pesan);
+    }
+
+    const list = (data || []) as WargaRow[];
+    list.sort((a, b) => {
+      const cmpBlok = (a.blok || '').localeCompare(b.blok || '');
+      if (cmpBlok !== 0) return cmpBlok;
+      const numA = parseInt(a.no_rumah, 10) || 0;
+      const numB = parseInt(b.no_rumah, 10) || 0;
+      return numA - numB;
+    });
+
+    return sukses(list);
+  } catch (err: unknown) {
+    const terjemahan = terjemahkanGalat(err);
+    return gagal(terjemahan.kode, terjemahan.pesan);
+  }
+}
+
+export interface SimpanWargaParams {
   id?: string;
   blok: string;
   no_rumah: string;
   nama: string;
-  aktif?: boolean;
 }
 
-export async function simpanWarga(
-  input: SimpanWargaInput
-): Promise<{ success: boolean; data?: unknown } | GalatApp> {
-  const { id, blok, no_rumah, nama, aktif = true } = input;
-
-  const cleanBlok = blok.trim().toUpperCase();
-  const cleanNo = no_rumah.trim();
-  const cleanNama = nama.trim().toUpperCase();
-
-  if (!cleanBlok || !cleanNo) {
-    return buatGalat('ISIAN_TIDAK_VALID', 'Blok dan nomor rumah wajib diisi.');
-  }
-
-  if (!cleanNama) {
-    return buatGalat('ISIAN_TIDAK_VALID', 'Nama warga wajib diisi.');
-  }
+export async function simpanWarga(params: SimpanWargaParams): Promise<Hasil<WargaRow>> {
+  const { id, blok, no_rumah, nama } = params;
 
   try {
     const supabase = await createClient();
@@ -37,36 +64,50 @@ export async function simpanWarga(
     } = await supabase.auth.getUser();
 
     if (!user) {
-      return buatGalat('BELUM_LOGIN', 'Silakan masuk terlebih dahulu.');
+      return gagal('BELUM_MASUK', 'Silakan masuk dulu.');
+    }
+
+    const cleanBlok = (blok || '').trim().toUpperCase();
+    const cleanNo = (no_rumah || '').trim();
+    const cleanNama = (nama || '').trim().toUpperCase();
+
+    if (!['C0', 'C1', 'C2'].includes(cleanBlok)) {
+      return gagal('GALAT_UMUM', 'Blok harus salah satu dari C0, C1, atau C2.');
+    }
+
+    if (!cleanNo) {
+      return gagal('GALAT_UMUM', 'Nomor rumah wajib diisi.');
+    }
+
+    if (!cleanNama) {
+      return gagal('GALAT_UMUM', 'Nama warga wajib diisi.');
     }
 
     if (id) {
-      // Update
+      // Ubah data
       const { data, error } = await supabase
         .from('warga')
         .update({
           blok: cleanBlok,
           no_rumah: cleanNo,
           nama: cleanNama,
-          aktif,
         })
         .eq('id', id)
         .select()
         .single();
 
       if (error) {
-        if (error.code === '23505') {
-          return buatGalat('DATA_KEMBAR', `Rumah di Blok ${cleanBlok} No. ${cleanNo} sudah terdaftar.`);
-        }
-        return buatGalat('GAGAL_SERVER', 'Gagal memperbarui data: ' + error.message);
+        const terjemahan = terjemahkanGalat(error);
+        return gagal(terjemahan.kode, terjemahan.pesan);
       }
 
       revalidatePath('/petugas/warga');
       revalidatePath('/petugas');
       revalidatePath('/');
-      return { success: true, data };
+
+      return sukses(data as WargaRow);
     } else {
-      // Insert baru
+      // Tambah baru
       const { data, error } = await supabase
         .from('warga')
         .insert({
@@ -79,30 +120,23 @@ export async function simpanWarga(
         .single();
 
       if (error) {
-        if (error.code === '23505') {
-          return buatGalat('DATA_KEMBAR', `Rumah di Blok ${cleanBlok} No. ${cleanNo} sudah terdaftar.`);
-        }
-        return buatGalat('GAGAL_SERVER', 'Gagal menambah warga: ' + error.message);
+        const terjemahan = terjemahkanGalat(error);
+        return gagal(terjemahan.kode, terjemahan.pesan);
       }
 
       revalidatePath('/petugas/warga');
       revalidatePath('/petugas');
       revalidatePath('/');
-      return { success: true, data };
+
+      return sukses(data as WargaRow);
     }
   } catch (err: unknown) {
-    console.error('Exception simpanWarga:', err);
-    return buatGalat('GAGAL_SERVER', 'Terjadi kesalahan sistem saat menyimpan warga.');
+    const terjemahan = terjemahkanGalat(err);
+    return gagal(terjemahan.kode, terjemahan.pesan);
   }
 }
 
-export async function nonaktifkanWarga(
-  wargaId: string
-): Promise<{ success: boolean } | GalatApp> {
-  if (!wargaId) {
-    return buatGalat('ISIAN_TIDAK_VALID', 'ID warga wajib disertakan.');
-  }
-
+export async function ubahStatusWarga(id: string, aktif: boolean): Promise<Hasil<null>> {
   try {
     const supabase = await createClient();
 
@@ -111,25 +145,26 @@ export async function nonaktifkanWarga(
     } = await supabase.auth.getUser();
 
     if (!user) {
-      return buatGalat('BELUM_LOGIN', 'Silakan masuk terlebih dahulu.');
+      return gagal('BELUM_MASUK', 'Silakan masuk dulu.');
     }
 
     const { error } = await supabase
       .from('warga')
-      .update({ aktif: false })
-      .eq('id', wargaId);
+      .update({ aktif })
+      .eq('id', id);
 
     if (error) {
-      return buatGalat('GAGAL_SERVER', 'Gagal menonaktifkan warga: ' + error.message);
+      const terjemahan = terjemahkanGalat(error);
+      return gagal(terjemahan.kode, terjemahan.pesan);
     }
 
     revalidatePath('/petugas/warga');
     revalidatePath('/petugas');
     revalidatePath('/');
 
-    return { success: true };
+    return sukses(null);
   } catch (err: unknown) {
-    console.error('Exception nonaktifkanWarga:', err);
-    return buatGalat('GAGAL_SERVER', 'Terjadi kesalahan sistem.');
+    const terjemahan = terjemahkanGalat(err);
+    return gagal(terjemahan.kode, terjemahan.pesan);
   }
 }

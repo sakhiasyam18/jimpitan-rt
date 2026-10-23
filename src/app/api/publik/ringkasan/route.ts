@@ -1,48 +1,32 @@
 import { NextResponse } from 'next/server';
 import { unstable_rethrow } from 'next/navigation';
-import { fetchRingkasanPublik } from '@/lib/data';
+import { createClient } from '@/lib/supabase/server';
+import { gagal, terjemahkanGalat } from '@/lib/galat';
 
 export async function GET() {
   try {
-    const data = await fetchRingkasanPublik();
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc('ringkasan_publik');
 
-    const petugasArray: string[] = [];
-    if (data.petugas_1 && data.petugas_1 !== 'Belum diatur' && data.petugas_1 !== '-') {
-      petugasArray.push(data.petugas_1);
+    if (error) {
+      console.error('RPC ringkasan_publik error:', error);
+      const terjemahan = terjemahkanGalat(error);
+      return NextResponse.json(gagal(terjemahan.kode, terjemahan.pesan), {
+        status: 500,
+      });
     }
-    if (data.petugas_2 && data.petugas_2 !== 'Belum diatur' && data.petugas_2 !== '-') {
-      petugasArray.push(data.petugas_2);
-    }
 
-    const responsePayload = {
-      sabtu: data.tanggal,
-      petugas: petugasArray.length > 0 ? petugasArray : ['Belum diatur', 'Belum diatur'],
-      terkumpul: data.total_terkumpul,
-      sudah_bayar: data.sudah_bayar_count,
-      total_rumah: data.total_rumah,
-      blok: data.blok_ringkasan.map((b) => ({
-        blok: b.blok,
-        sudah: b.sudah_bayar,
-        total: b.total_rumah,
-        nunggak: b.nunggak,
-      })),
-    };
-
-    return NextResponse.json(responsePayload, {
+    return NextResponse.json(data, {
+      status: 200,
       headers: {
-        'Cache-Control': 'no-store, max-age=0',
+        'Cache-Control': 'public, max-age=0, s-maxage=15, stale-while-revalidate=30',
       },
     });
   } catch (err: unknown) {
     unstable_rethrow(err);
-    console.error('Error /api/publik/ringkasan:', err);
+    console.error('Exception GET /api/publik/ringkasan:', err);
     return NextResponse.json(
-      {
-        error: {
-          kode: 'GAGAL_SERVER',
-          pesan: 'Gagal mengambil ringkasan data publik.',
-        },
-      },
+      gagal('GALAT_UMUM', 'Ada masalah. Coba lagi sebentar.'),
       { status: 500 }
     );
   }
