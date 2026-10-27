@@ -9,36 +9,38 @@ import BarProgres from './BarProgres';
 import Lencana from './Lencana';
 
 interface BerandaLiveProps {
-  initialData: RingkasanPublikResponse;
+  initialData: RingkasanPublikResponse | null;
 }
 
 export default function BerandaLive({ initialData }: BerandaLiveProps) {
-  const [data, setData] = useState<RingkasanPublikResponse>(initialData);
+  const [data, setData] = useState<RingkasanPublikResponse | null>(initialData);
   const [gagalSegar, setGagalSegar] = useState<boolean>(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  useEffect(() => {
-    async function segarkan() {
-      // Hentikan polling jika tab tidak terlihat
-      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
-        return;
-      }
-
-      try {
-        const res = await fetch('/api/publik/ringkasan', { cache: 'no-store' });
-        if (res.ok) {
-          const freshData: RingkasanPublikResponse = await res.json();
-          setData(freshData);
-          setGagalSegar(false);
-        } else {
-          setGagalSegar(true);
-        }
-      } catch (err) {
-        console.warn('Gagal polling ringkasan:', err);
-        setGagalSegar(true);
-      }
+  const segarkan = async () => {
+    // Hentikan polling jika tab tidak terlihat
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+      return;
     }
 
+    try {
+      const res = await fetch('/api/publik/ringkasan', { cache: 'no-store' });
+      if (res.ok) {
+        const freshData: RingkasanPublikResponse = await res.json();
+        if (freshData && Array.isArray(freshData.blok) && typeof freshData.total_rumah === 'number') {
+          setData(freshData);
+          setGagalSegar(false);
+          return;
+        }
+      }
+      setGagalSegar(true);
+    } catch (err) {
+      console.warn('Gagal polling ringkasan:', err);
+      setGagalSegar(true);
+    }
+  };
+
+  useEffect(() => {
     intervalRef.current = setInterval(segarkan, 30000);
 
     const handleVisibility = () => {
@@ -53,6 +55,49 @@ export default function BerandaLive({ initialData }: BerandaLiveProps) {
       document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, []);
+
+  if (!data) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col justify-between max-w-[480px] mx-auto w-full border-x border-slate-200">
+        <main className="p-4 sm:p-5 flex-1 flex flex-col justify-center gap-6">
+          <header className="text-center flex flex-col items-center">
+            <h1 className="text-[26px] sm:text-[30px] font-black text-slate-950 tracking-tight">
+              Jimpitan RT 23
+            </h1>
+            <p className="text-[15px] sm:text-[16px] font-semibold text-slate-500 mt-0.5">
+              RW 6 · Munggut Peni
+            </p>
+          </header>
+
+          <div className="p-6 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-950 flex flex-col items-center text-center gap-4 shadow-xs">
+            <span className="text-[32px]">⚠️</span>
+            <p className="text-[18px] sm:text-[20px] font-bold leading-snug">
+              Data belum bisa dimuat. Coba lagi sebentar.
+            </p>
+            <button
+              type="button"
+              onClick={segarkan}
+              className="w-full min-h-[56px] px-6 py-3 bg-amber-800 hover:bg-amber-900 active:scale-[0.98] text-white rounded-xl font-bold text-[18px] cursor-pointer flex items-center justify-center transition-transform"
+            >
+              Coba lagi
+            </button>
+          </div>
+        </main>
+
+        <footer className="p-4 border-t border-slate-200 bg-white text-center flex flex-col items-center gap-1.5">
+          <Link
+            href="/login"
+            className="text-[15px] font-bold text-blue-900 hover:text-blue-950 underline py-2 min-h-[56px] flex items-center justify-center cursor-pointer"
+          >
+            Masuk untuk petugas
+          </Link>
+          <p className="text-[14px] text-slate-400">
+            Jimpitan RT 23 RW 6 · Kelurahan Munggut
+          </p>
+        </footer>
+      </div>
+    );
+  }
 
   const teksPetugas =
     data.petugas && data.petugas.length > 0
@@ -75,7 +120,7 @@ export default function BerandaLive({ initialData }: BerandaLiveProps) {
             RW 6 · Munggut Peni
           </p>
           {gagalSegar && (
-            <span className="text-[13px] text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded-full font-bold mt-1.5">
+            <span className="text-[14px] text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded-full font-bold mt-1.5">
               Gagal menyegarkan
             </span>
           )}
@@ -83,7 +128,7 @@ export default function BerandaLive({ initialData }: BerandaLiveProps) {
 
         {/* 2. Kartu Petugas (Latar Biru Muda) */}
         <section className="bg-blue-50 border border-blue-200 p-4 sm:p-5 rounded-2xl flex flex-col gap-1 shadow-xs">
-          <span className="text-[13px] font-bold uppercase tracking-wider text-blue-900">
+          <span className="text-[14px] font-bold uppercase tracking-wider text-blue-900">
             Petugas jaga, {tglJaga}
           </span>
           <p className="text-[18px] sm:text-[20px] font-black text-blue-950 mt-0.5">
@@ -163,11 +208,11 @@ export default function BerandaLive({ initialData }: BerandaLiveProps) {
       <footer className="p-4 border-t border-slate-200 bg-white text-center flex flex-col items-center gap-1.5">
         <Link
           href="/login"
-          className="text-[15px] font-bold text-blue-900 hover:text-blue-950 underline py-2 min-h-[44px] flex items-center justify-center cursor-pointer"
+          className="text-[15px] font-bold text-blue-900 hover:text-blue-950 underline py-2 min-h-[56px] flex items-center justify-center cursor-pointer"
         >
           Masuk untuk petugas
         </Link>
-        <p className="text-[13px] text-slate-400">
+        <p className="text-[14px] text-slate-400">
           Jimpitan RT 23 RW 6 · Kelurahan Munggut
         </p>
       </footer>

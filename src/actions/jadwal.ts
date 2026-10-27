@@ -6,6 +6,50 @@ import { adalahSabtu } from '@/lib/validasi';
 import { AkunPetugasRow, Hasil, JadwalRow } from '@/types';
 import { revalidatePath } from 'next/cache';
 
+interface JadwalJoinRow {
+  id: string;
+  tanggal: string;
+  petugas_1: string | null;
+  petugas_2: string | null;
+  catatan: string | null;
+  w1: { nama: string | null } | { nama: string | null }[] | null;
+  w2: { nama: string | null } | { nama: string | null }[] | null;
+}
+
+function ekstrakNamaWarga(w: { nama: string | null } | { nama: string | null }[] | null): string | null {
+  if (!w) return null;
+  if (Array.isArray(w)) {
+    return w[0]?.nama || null;
+  }
+  return w.nama || null;
+}
+
+export async function ambilSabtuBerikutnya(): Promise<Hasil<string>> {
+  try {
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return gagal('BELUM_MASUK', 'Silakan masuk dulu.');
+    }
+
+    const { data, error } = await supabase.rpc('sabtu_berikutnya');
+
+    if (error || !data) {
+      const terjemahan = terjemahkanGalat(error);
+      return gagal(terjemahan.kode, terjemahan.pesan);
+    }
+
+    return sukses(String(data));
+  } catch (err: unknown) {
+    const terjemahan = terjemahkanGalat(err);
+    return gagal(terjemahan.kode, terjemahan.pesan);
+  }
+}
+
 export async function lihatJadwal(dari: string, sampai: string): Promise<Hasil<JadwalRow[]>> {
   try {
     const supabase = await createClient();
@@ -34,7 +78,7 @@ export async function lihatJadwal(dari: string, sampai: string): Promise<Hasil<J
       .order('tanggal', { ascending: true });
 
     if (error) {
-      // Jika foreign key name berbeda, fallback ke query dengan join standar
+      // Jika foreign key name berbeda, fallback ke query dengan join nama kolom
       const { data: fallbackData, error: fallbackErr } = await supabase
         .from('jadwal')
         .select(`
@@ -55,27 +99,29 @@ export async function lihatJadwal(dari: string, sampai: string): Promise<Hasil<J
         return gagal(terjemahan.kode, terjemahan.pesan);
       }
 
-      const rows = (fallbackData || []).map((j: any) => ({
+      const rawFallback = (fallbackData || []) as unknown as JadwalJoinRow[];
+      const rows: JadwalRow[] = rawFallback.map((j) => ({
         id: j.id,
         tanggal: j.tanggal,
         petugas_1: j.petugas_1,
         petugas_2: j.petugas_2,
         catatan: j.catatan,
-        petugas_1_nama: j.w1?.nama || null,
-        petugas_2_nama: j.w2?.nama || null,
+        petugas_1_nama: ekstrakNamaWarga(j.w1),
+        petugas_2_nama: ekstrakNamaWarga(j.w2),
       }));
 
       return sukses(rows);
     }
 
-    const rows: JadwalRow[] = (data || []).map((j: any) => ({
+    const rawRows = (data || []) as unknown as JadwalJoinRow[];
+    const rows: JadwalRow[] = rawRows.map((j) => ({
       id: j.id,
       tanggal: j.tanggal,
       petugas_1: j.petugas_1,
       petugas_2: j.petugas_2,
       catatan: j.catatan,
-      petugas_1_nama: j.w1?.nama || null,
-      petugas_2_nama: j.w2?.nama || null,
+      petugas_1_nama: ekstrakNamaWarga(j.w1),
+      petugas_2_nama: ekstrakNamaWarga(j.w2),
     }));
 
     return sukses(rows);

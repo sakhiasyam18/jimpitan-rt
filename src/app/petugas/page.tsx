@@ -42,6 +42,7 @@ export default function DaftarRumahPage() {
 
   useEffect(() => {
     muatData(blokDipilih);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blokDipilih]);
 
   // Filter pencarian nama/nomor di sisi client (tanpa memanggil server)

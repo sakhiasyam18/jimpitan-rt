@@ -107,7 +107,7 @@ export default function LayarTerimaSetoran({
             <button
               type="button"
               onClick={onTutup}
-              className="min-h-[48px] px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-[16px] cursor-pointer"
+              className="min-h-[56px] px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-white font-bold text-[16px] cursor-pointer flex items-center justify-center"
             >
               Kembali
             </button>
@@ -136,7 +136,7 @@ export default function LayarTerimaSetoran({
             )}
 
             {rumah.sudah_dicatat_sabtu_ini && (
-              <p className="text-[13px] text-amber-800 font-bold mt-1.5 pt-1.5 border-t border-slate-200">
+              <p className="text-[14px] text-amber-800 font-bold mt-1.5 pt-1.5 border-t border-slate-200">
                 Sudah tercatat {formatRupiah(rumah.setoran_sabtu_ini)} untuk Sabtu ini. Memilih lagi akan <strong className="underline">mengganti</strong>.
               </p>
             )}
@@ -215,7 +215,7 @@ export default function LayarTerimaSetoran({
               {/* Input Angka jika memilih Lainnya */}
               {modeLainnya && (
                 <div className="mt-1 flex flex-col gap-1.5">
-                  <label htmlFor="input-lainnya" className="text-[13px] font-bold text-slate-700">
+                  <label htmlFor="input-lainnya" className="text-[14px] font-bold text-slate-700">
                     Ketik nominal angka:
                   </label>
                   <div className="relative">

@@ -125,7 +125,7 @@ export default function LoginPage() {
       </main>
 
       {/* Footer */}
-      <footer className="p-4 text-center text-[13px] text-slate-400">
+      <footer className="p-4 text-center text-[14px] text-slate-400">
         Jimpitan RT 23 RW 6 · Kelurahan Munggut
       </footer>
     </div>

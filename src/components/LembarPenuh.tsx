@@ -29,7 +29,7 @@ export default function LembarPenuh({
         <div className="p-4 sm:p-5 bg-slate-900 text-white flex items-center justify-between gap-3 shrink-0">
           <div className="min-w-0 flex-1">
             {subJudul && (
-              <span className="text-[13px] font-bold uppercase tracking-wider text-emerald-400 block">
+              <span className="text-[14px] font-bold uppercase tracking-wider text-emerald-400 block">
                 {subJudul}
               </span>
             )}
@@ -42,7 +42,7 @@ export default function LembarPenuh({
           <button
             type="button"
             onClick={onTutup}
-            className="min-h-[44px] min-w-[44px] px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-[16px] cursor-pointer flex items-center justify-center shrink-0"
+            className="min-h-[56px] min-w-[56px] px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-white font-bold text-[16px] cursor-pointer flex items-center justify-center shrink-0"
           >
             Kembali
           </button>

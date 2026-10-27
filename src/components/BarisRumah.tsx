@@ -67,7 +67,7 @@ export default function BarisRumah({ rumah, onClick }: BarisRumahProps) {
             {rumah.label}
           </h3>
           {rumah.langganan_nunggak && (
-            <span className="text-[13px] font-black text-rose-700 bg-rose-200/80 px-2 py-0.5 rounded-md">
+            <span className="text-[14px] font-black text-rose-700 bg-rose-200/80 px-2 py-0.5 rounded-md">
               LANGGANAN NUNGGAK
             </span>
           )}

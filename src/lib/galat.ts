@@ -36,15 +36,17 @@ export function terjemahkanGalat(err: unknown): { kode: string; pesan: string } 
 
   // 3. Constraint violation (23514)
   if (code === '23514') {
-    if (message.includes('petugas') || message.includes('jadwal_petugas_beda')) {
+    const msg = message.toLowerCase();
+    if (msg.includes('petugas_beda') || msg.includes('petugas')) {
       return { kode: 'PETUGAS_SAMA', pesan: 'Dua petugas harus orang berbeda.' };
     }
-    if (message.includes('sabtu') || message.includes('isodow')) {
+    if (msg.includes('tanggal_check') || msg.includes('sabtu') || msg.includes('isodow')) {
       return { kode: 'SABTU_SALAH', pesan: 'Tanggal harus hari Sabtu.' };
     }
-    if (message.includes('jumlah') || message.includes('>= 0')) {
+    if (msg.includes('jumlah_check') || msg.includes('jumlah')) {
       return { kode: 'JUMLAH_TIDAK_VALID', pesan: 'Jumlah harus angka, nol atau lebih.' };
     }
+    return { kode: 'GALAT_UMUM', pesan: 'Ada masalah. Coba lagi sebentar.' };
   }
 
   // 4. Rumah tidak aktif

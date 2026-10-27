@@ -17,7 +17,7 @@ export default function BarProgres({ sudah, total, label = 'Progres' }: BarProgr
           style={{ width: `${persen}%` }}
         ></div>
       </div>
-      <div className="flex justify-between items-center text-[13px] font-bold text-slate-600">
+      <div className="flex justify-between items-center text-[14px] font-bold text-slate-600">
         <span>{label}</span>
         <span>{persen}%</span>
       </div>

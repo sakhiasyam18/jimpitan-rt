@@ -41,33 +41,3 @@ export interface Pengaturan {
   batas_langganan_nunggak: number;
   updated_at: string;
 }
-
-export interface BlokRingkasan {
-  blok: string;
-  total_rumah: number;
-  sudah_bayar: number;
-  nunggak: number;
-}
-
-export interface RingkasanPublikData {
-  tanggal: string;
-  petugas_1: string;
-  petugas_2: string;
-  catatan_jadwal: string | null;
-  total_terkumpul: number;
-  sudah_bayar_count: number;
-  total_rumah: number;
-  iuran_per_minggu: number;
-  jumlah_sabtu: number;
-  blok_ringkasan: BlokRingkasan[];
-}
-
-export interface RumahWithStatus extends Warga {
-  setoran_sabtu_ini: number | null; // null jika belum ada input, 0 jika diisi 0, >0 jika sudah bayar
-  total_bayar: number;
-  kewajiban: number;
-  saldo: number;
-  minggu_nunggak: number;
-  is_langganan_nunggak: boolean;
-  status_label: 'lunas' | 'lebih' | 'nunggak';
-}

@@ -113,7 +113,7 @@ Mobile 360px, tema terang saja (`color-scheme: light`), zoom diizinkan. Huruf ut
 
 **Supabase**
 - [ ] `jimpitan-final.sql` dijalankan penuh. Cek: C0=29, C1=2, C2=20, `total_rumah=51`, RLS aktif di 5 tabel.
-- [ ] Hapus fungsi lama: `ringkasan_publik(date)`, `is_petugas_aktif()`, `hitung_jumlah_sabtu(date,date)`.
+- [ ] Fungsi lama (`ringkasan_publik(date)`, `is_petugas_aktif()`, `hitung_jumlah_sabtu(date,date)`) sudah dihapus otomatis oleh bagian 0 SQL. Cek tidak ada fungsi ganda: `select proname, pg_get_function_identity_arguments(oid) from pg_proc where pronamespace='public'::regnamespace and proname like 'ringkasan%';` harus satu baris dengan argumen kosong.
 - [ ] Akun petugas dibuat (Auth) dan terhubung ke `akun_petugas`.
 - [ ] Sign-ups mandiri dimatikan.
 - [ ] `pengaturan.tanggal_mulai` diset ke Sabtu pertama pemakaian.

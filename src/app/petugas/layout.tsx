@@ -55,7 +55,7 @@ export default function PetugasLayout({ children }: { children: React.ReactNode 
       {/* Kepala Bersama */}
       <header className="bg-slate-900 text-white p-4 sticky top-0 z-30 shadow-md flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <span className="text-[13px] font-bold uppercase tracking-wider text-emerald-400 block">
+          <span className="text-[14px] font-bold uppercase tracking-wider text-emerald-400 block">
             Jimpitan RT 23
           </span>
           <p className="text-[18px] sm:text-[20px] font-black truncate mt-0.5">
@@ -65,7 +65,7 @@ export default function PetugasLayout({ children }: { children: React.ReactNode 
         <button
           type="button"
           onClick={handleKeluar}
-          className="min-h-[44px] px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-xl text-[14px] font-bold border border-slate-700 cursor-pointer"
+          className="min-h-[56px] px-4 py-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 hover:text-white rounded-xl text-[15px] font-bold border border-slate-700 cursor-pointer flex items-center justify-center"
         >
           Keluar
         </button>

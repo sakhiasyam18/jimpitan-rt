@@ -20,7 +20,7 @@ export default function KotakGalat({ pesan, onCobaLagi }: KotakGalatProps) {
         <button
           type="button"
           onClick={onCobaLagi}
-          className="self-start min-h-[44px] px-4 py-2 bg-rose-800 hover:bg-rose-900 text-white rounded-xl font-bold text-[15px] cursor-pointer"
+          className="self-start min-h-[56px] px-5 py-3 bg-rose-800 hover:bg-rose-900 active:scale-95 text-white rounded-xl font-bold text-[16px] cursor-pointer flex items-center justify-center transition-transform"
         >
           Coba lagi
         </button>

@@ -1,5 +1,3 @@
-import { ZONA_WAKTU } from './konstanta';
-
 /**
  * Format angka ke Rupiah standar: Rp2.000 (titik ribuan, tanpa spasi, tanpa desimal)
  */

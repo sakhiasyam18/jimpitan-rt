@@ -22,14 +22,14 @@ export default function KartuAngka({
 
   return (
     <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex-1 flex flex-col justify-between">
-      <span className="text-[13px] font-bold uppercase tracking-wider text-slate-500">
+      <span className="text-[14px] font-bold uppercase tracking-wider text-slate-500">
         {label}
       </span>
       <p className={`text-[24px] sm:text-[28px] font-black tracking-tight my-1 ${warnaText}`}>
         {nilai}
       </p>
       {subLabel && (
-        <span className="text-[13px] text-slate-500 font-medium">
+        <span className="text-[14px] text-slate-500 font-medium">
           {subLabel}
         </span>
       )}

@@ -176,7 +176,7 @@ export default function WargaPage() {
                   <h2 className="text-[18px] sm:text-[20px] font-black text-slate-800">
                     Blok {blokKey}
                   </h2>
-                  <span className="text-[13px] font-bold text-slate-500">
+                  <span className="text-[14px] font-bold text-slate-500">
                     {barisList.length} rumah
                   </span>
                 </div>

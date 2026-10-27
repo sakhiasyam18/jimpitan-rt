@@ -8,9 +8,9 @@ import {
   aturJadwal,
   isiJadwalOtomatis,
   daftarPetugasAktif,
+  ambilSabtuBerikutnya,
 } from '@/actions/jadwal';
 import { formatTanggal } from '@/lib/format';
-import { getSabtuTerkait } from '@/lib/saldo';
 import TombolBesar from '@/components/TombolBesar';
 import KotakBerhasil from '@/components/KotakBerhasil';
 import KotakGalat from '@/components/KotakGalat';
@@ -34,10 +34,9 @@ export default function JadwalPage() {
   const [pesanGlobal, setPesanGlobal] = useState<string | null>(null);
   const [memuatOtomatis, setMemuatOtomatis] = useState<boolean>(false);
 
-  // Ambil daftar 8 Sabtu ke depan
-  function hitung8Sabtu(): string[] {
-    const sabtuIni = getSabtuTerkait();
-    const [y, m, d] = sabtuIni.split('-').map(Number);
+  // Ambil daftar 8 Sabtu dari sabtu_berikutnya RPC
+  function bentuk8Sabtu(sabtuPertama: string): string[] {
+    const [y, m, d] = sabtuPertama.split('-').map(Number);
     const startDate = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
 
     const list: string[] = [];
@@ -80,8 +79,16 @@ export default function JadwalPage() {
       }
       setPetugasList(hasilPetugas.data);
 
-      // 3. Ambil jadwal 8 Sabtu
-      const delapanSabtu = hitung8Sabtu();
+      // 3. Ambil tanggal Sabtu berikutnya dari database (RPC)
+      const hasilSabtu = await ambilSabtuBerikutnya();
+      if (!hasilSabtu.ok) {
+        setGalatHalaman(hasilSabtu.error.pesan);
+        setMemuatHalaman(false);
+        return;
+      }
+
+      // 4. Hitung 8 Sabtu memakai UTC dari tanggal database
+      const delapanSabtu = bentuk8Sabtu(hasilSabtu.data);
       const tglAwal = delapanSabtu[0];
       const tglAkhir = delapanSabtu[delapanSabtu.length - 1];
 
@@ -119,6 +126,7 @@ export default function JadwalPage() {
 
   useEffect(() => {
     muatData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function handleUbahPetugas(
@@ -162,27 +170,23 @@ export default function JadwalPage() {
       catatan: baris.catatan,
     });
 
+    setDaftarSabtu((prev) =>
+      prev.map((b) => {
+        if (b.tanggal !== baris.tanggal) return b;
+        if (hasil.ok) {
+          return { ...b, memuatSimpan: false, suksesBaris: true, galatBaris: null };
+        } else {
+          return { ...b, memuatSimpan: false, galatBaris: hasil.error.pesan, suksesBaris: false };
+        }
+      })
+    );
+
     if (hasil.ok) {
-      setDaftarSabtu((prev) =>
-        prev.map((b) =>
-          b.tanggal === baris.tanggal
-            ? { ...b, memuatSimpan: false, suksesBaris: true, galatBaris: null }
-            : b
-        )
-      );
       setTimeout(() => {
         setDaftarSabtu((prev) =>
           prev.map((b) => (b.tanggal === baris.tanggal ? { ...b, suksesBaris: false } : b))
         );
-      }, 2000);
-    } else {
-      setDaftarSabtu((prev) =>
-        prev.map((b) =>
-          b.tanggal === baris.tanggal
-            ? { ...b, memuatSimpan: false, galatBaris: hasil.error.pesan }
-            : b
-        )
-      );
+      }, 2500);
     }
   }
 
@@ -192,8 +196,15 @@ export default function JadwalPage() {
     );
     if (!yakin) return;
 
-    const delapan = hitung8Sabtu();
-    const sabtuAwal = delapan[0];
+    let sabtuAwal = daftarSabtu[0]?.tanggal;
+    if (!sabtuAwal) {
+      const res = await ambilSabtuBerikutnya();
+      if (!res.ok) {
+        alert(res.error.pesan);
+        return;
+      }
+      sabtuAwal = res.data;
+    }
 
     setMemuatOtomatis(true);
     const hasil = await isiJadwalOtomatis({
@@ -259,7 +270,7 @@ export default function JadwalPage() {
                     {tglFormatted}
                   </h2>
                   {idx === 0 && (
-                    <span className="text-[13px] font-bold text-blue-900 bg-blue-50 px-2.5 py-0.5 rounded-lg border border-blue-200">
+                    <span className="text-[14px] font-bold text-blue-900 bg-blue-50 px-2.5 py-0.5 rounded-lg border border-blue-200">
                       Terdekat
                     </span>
                   )}
