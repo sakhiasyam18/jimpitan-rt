@@ -87,8 +87,8 @@ export async function lihatJadwal(dari: string, sampai: string): Promise<Hasil<J
 
 export interface AturJadwalParams {
   tanggal: string;
-  petugas_1: string;
-  petugas_2: string;
+  petugas_1: string | null;
+  petugas_2: string | null;
   catatan?: string | null;
 }
 

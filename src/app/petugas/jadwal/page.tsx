@@ -129,7 +129,7 @@ export default function JadwalPage() {
     setDaftarSabtu((prev) =>
       prev.map((b) => {
         if (b.tanggal !== tanggal) return b;
-        const updated = { ...b, [kolom]: val || null, galatBaris: null };
+        const updated: BarisSabtu = { ...b, [kolom]: val || null, galatBaris: null };
         // Validasi instan petugas sama
         if (updated.petugas_1 && updated.petugas_2 && updated.petugas_1 === updated.petugas_2) {
           updated.galatBaris = 'Dua petugas harus orang berbeda.';
