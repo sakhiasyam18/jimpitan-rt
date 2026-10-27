@@ -136,7 +136,7 @@ export async function simpanWarga(params: SimpanWargaParams): Promise<Hasil<Warg
   }
 }
 
-export async function ubahStatusWarga(id: string, aktif: boolean): Promise<Hasil<null>> {
+export async function ubahStatusWarga(id: string, aktif: boolean): Promise<Hasil<WargaRow>> {
   try {
     const supabase = await createClient();
 
@@ -148,12 +148,14 @@ export async function ubahStatusWarga(id: string, aktif: boolean): Promise<Hasil
       return gagal('BELUM_MASUK', 'Silakan masuk dulu.');
     }
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('warga')
       .update({ aktif })
-      .eq('id', id);
+      .eq('id', id)
+      .select()
+      .single();
 
-    if (error) {
+    if (error || !data) {
       const terjemahan = terjemahkanGalat(error);
       return gagal(terjemahan.kode, terjemahan.pesan);
     }
@@ -162,7 +164,7 @@ export async function ubahStatusWarga(id: string, aktif: boolean): Promise<Hasil
     revalidatePath('/petugas');
     revalidatePath('/');
 
-    return sukses(null);
+    return sukses(data as WargaRow);
   } catch (err: unknown) {
     const terjemahan = terjemahkanGalat(err);
     return gagal(terjemahan.kode, terjemahan.pesan);

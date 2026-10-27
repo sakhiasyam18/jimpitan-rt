@@ -8,14 +8,14 @@ Prasyarat: `docs/spec-rilis-jimpitan-rt.md`, `docs/kerangka-jimpitan-rt.md`, `AG
 
 Bangun lapisan **data dan API** aplikasi Jimpitan RT (Next.js App Router + TypeScript + `@supabase/ssr`). Tampilan dikerjakan di tahap 2, jadi di sini **tanpa halaman final**.
 
-Baca dulu `AGENTS.md` dan `docs/spec-rilis-jimpitan-rt.md`. Spesifikasi itu berlaku untuk model data, invarian, daftar aksi, kode galat, dan pemetaan galat Postgres. **Jangan mengulang atau mengubahnya**, cukup implementasikan.
+Baca dulu `AGENTS.md`, `docs/spec-rilis-jimpitan-rt.md`, dan `docs/api-design.md` (kontrak tipe masukan/keluaran tiap aksi). Spesifikasi itu berlaku untuk model data, invarian, daftar aksi, kode galat, dan pemetaan galat Postgres. **Jangan mengulang atau mengubahnya**, cukup implementasikan.
 
 ## Yang dibangun
 
 1. **`src/lib/supabase/server.ts`** (client berbasis cookie untuk Server Components, Server Actions, Route Handler) dan **`browser.ts`** (hanya bila perlu).
 2. **`src/proxy.ts`** (Next.js 16; bila versi lebih lama, `middleware.ts`): menyegarkan sesi dan mengalihkan `/petugas/*` ke `/login` bila belum masuk. Cek dokumen Next di `node_modules/next/dist/docs/`.
 3. **`src/app/api/publik/ringkasan/route.ts`**: `GET` memanggil `rpc('ringkasan_publik')`, mengembalikan JSON apa adanya dengan header cache dari spek. Galat: 500 + `{ error: { kode, pesan } }`.
-4. **`src/actions/`**: `auth.ts`, `setoran.ts`, `jadwal.ts`, `warga.ts`, `pengaturan.ts` dengan semua aksi di tabel "Server Actions" pada spek (termasuk `ambilSabtuBerikutnya`). Semua mengembalikan `Hasil<T>`.
+4. **`src/actions/`**: `auth.ts`, `setoran.ts`, `jadwal.ts`, `warga.ts`, `pengaturan.ts` dengan **semua 14 aksi** di `docs/api-design.md` (nama, masukan, dan keluaran harus persis sama). Semua mengembalikan `Hasil<T>`.
 5. **`src/lib/`**:
    - `konstanta.ts`: `EMAIL_DOMAIN = 'jimpitan.local'`, `BATAS_JUMLAH_BESAR = 50000`, `ZONA_WAKTU = 'Asia/Jakarta'`
    - `validasi.ts`: `adalahSabtu(tanggalIso)` dan `adalahRupiahValid(n)` (hitung di zona Asia/Jakarta)

@@ -8,7 +8,7 @@ Prasyarat: tahap 1 (API) selesai dan 14 pemeriksaannya lulus. Salin semua isi di
 
 Bangun **halaman dan tampilan** Jimpitan RT. Pengguna utama bapak-bapak generasi orang tua di HP: **tulisan besar, tombol besar, alur sependek mungkin**.
 
-Baca dulu `AGENTS.md` dan `docs/spec-rilis-jimpitan-rt.md`, lalu kode di `src/actions`, `src/lib`, `src/types`. **Pakai apa adanya.** Bila ada yang kurang atau salah di sana, laporkan, jangan diperbaiki sendiri.
+Baca dulu `AGENTS.md`, `docs/spec-rilis-jimpitan-rt.md`, dan `docs/api-design.md`, lalu kode di `src/actions`, `src/lib`, `src/types`. **Pakai apa adanya.** Bila ada yang kurang atau salah di sana, laporkan, jangan diperbaiki sendiri.
 
 ## Aturan tampilan (semua halaman)
 

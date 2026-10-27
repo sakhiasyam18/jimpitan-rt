@@ -6,6 +6,7 @@ Sumber kebenaran untuk AI agent dan developer. Bila ada konflik dengan dokumen l
 |---|---|
 | `docs/kerangka-jimpitan-rt.md` | Konteks produk dan aturan bisnis |
 | `docs/spec-rilis-jimpitan-rt.md` | Spesifikasi teknis (berkas ini) |
+| `docs/api-design.md` | Kontrak API: tipe masukan/keluaran semua aksi dan kode galat |
 | `supabase/jimpitan-final.sql` | Skema, RLS, view, fungsi, data awal. **Tidak diedit oleh agent** |
 | `AGENTS.md` | Aturan tetap untuk AI agent |
 
@@ -55,6 +56,8 @@ Next.js (App Router, TypeScript), Tailwind, `@supabase/supabase-js`, `@supabase/
 7. Kegagalan data tidak boleh menghasilkan angka cadangan atau tiruan di UI.
 
 ## 5. API
+
+Kontrak lengkap (tipe masukan, keluaran, galat per aksi) ada di `docs/api-design.md`. Ringkasannya:
 
 **Route publik.** `GET /api/publik/ringkasan` memanggil `rpc('ringkasan_publik')`. Header `Cache-Control: public, max-age=0, s-maxage=15, stale-while-revalidate=30`. Galat: 500 dengan `{ error: { kode, pesan } }`. Ini satu-satunya route handler.
 

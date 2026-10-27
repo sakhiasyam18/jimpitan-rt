@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { unstable_rethrow } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { gagal, terjemahkanGalat } from '@/lib/galat';
+import { terjemahkanGalat } from '@/lib/galat';
 
 export async function GET() {
   try {
@@ -11,9 +11,10 @@ export async function GET() {
     if (error) {
       console.error('RPC ringkasan_publik error:', error);
       const terjemahan = terjemahkanGalat(error);
-      return NextResponse.json(gagal(terjemahan.kode, terjemahan.pesan), {
-        status: 500,
-      });
+      return NextResponse.json(
+        { error: { kode: terjemahan.kode, pesan: terjemahan.pesan } },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json(data, {
@@ -26,7 +27,7 @@ export async function GET() {
     unstable_rethrow(err);
     console.error('Exception GET /api/publik/ringkasan:', err);
     return NextResponse.json(
-      gagal('GALAT_UMUM', 'Ada masalah. Coba lagi sebentar.'),
+      { error: { kode: 'GALAT_UMUM', pesan: 'Ada masalah. Coba lagi sebentar.' } },
       { status: 500 }
     );
   }

@@ -194,7 +194,13 @@ export interface IsiJadwalOtomatisParams {
   jumlah_minggu: number;
 }
 
-export async function isiJadwalOtomatis(params: IsiJadwalOtomatisParams): Promise<Hasil<{ jumlah_diisi: number }>> {
+export interface HasilIsiJadwalOtomatis {
+  jumlah_diisi: number;
+  terisi: number;
+  dilewati: number;
+}
+
+export async function isiJadwalOtomatis(params: IsiJadwalOtomatisParams): Promise<Hasil<HasilIsiJadwalOtomatis>> {
   const { tanggal_mulai, jumlah_minggu } = params;
 
   try {
@@ -294,7 +300,11 @@ export async function isiJadwalOtomatis(params: IsiJadwalOtomatisParams): Promis
     revalidatePath('/petugas/jadwal');
     revalidatePath('/');
 
-    return sukses({ jumlah_diisi: rowsToInsert.length });
+    return sukses({
+      jumlah_diisi: rowsToInsert.length,
+      terisi: rowsToInsert.length,
+      dilewati: existingSet.size,
+    });
   } catch (err: unknown) {
     const terjemahan = terjemahkanGalat(err);
     return gagal(terjemahan.kode, terjemahan.pesan);
