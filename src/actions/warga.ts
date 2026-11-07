@@ -170,3 +170,89 @@ export async function ubahStatusWarga(id: string, aktif: boolean): Promise<Hasil
     return gagal(terjemahan.kode, terjemahan.pesan);
   }
 }
+
+export interface BarisImporWarga {
+  blok: string;
+  no_rumah: string;
+  nama: string;
+}
+
+export interface HasilImpor {
+  berhasil: number;
+  gagal: number;
+  rincian: string[];
+}
+
+export async function imporWargaBatch(daftar: BarisImporWarga[]): Promise<Hasil<HasilImpor>> {
+  try {
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return gagal('BELUM_MASUK', 'Silakan masuk dulu.');
+    }
+
+    if (!Array.isArray(daftar) || daftar.length === 0) {
+      return gagal('VALIDASI_GAGAL', 'Tidak ada data warga untuk diimpor.');
+    }
+
+    let berhasil = 0;
+    let jumlahGagal = 0;
+    const rincian: string[] = [];
+
+    for (const item of daftar) {
+      const cleanBlok = (item.blok || '').trim().toUpperCase();
+      const cleanNo = (item.no_rumah || '').trim();
+      const cleanNama = (item.nama || '').trim().toUpperCase();
+
+      if (!['C0', 'C1', 'C2'].includes(cleanBlok)) {
+        jumlahGagal++;
+        rincian.push(`Blok "${cleanBlok}" tidak valid (harus C0, C1, atau C2).`);
+        continue;
+      }
+
+      if (!cleanNo) {
+        jumlahGagal++;
+        rincian.push(`Nomor rumah tidak boleh kosong.`);
+        continue;
+      }
+
+      if (!cleanNama) {
+        jumlahGagal++;
+        rincian.push(`Nama warga Blok ${cleanBlok} No ${cleanNo} tidak boleh kosong.`);
+        continue;
+      }
+
+      const { error } = await supabase
+        .from('warga')
+        .upsert(
+          {
+            blok: cleanBlok,
+            no_rumah: cleanNo,
+            nama: cleanNama,
+            aktif: true,
+          },
+          { onConflict: 'blok,no_rumah' }
+        );
+
+      if (error) {
+        jumlahGagal++;
+        rincian.push(`Gagal simpan Blok ${cleanBlok} No ${cleanNo}: ${error.message}`);
+      } else {
+        berhasil++;
+      }
+    }
+
+    revalidatePath('/petugas/warga');
+    revalidatePath('/petugas');
+    revalidatePath('/');
+
+    return sukses({ berhasil, gagal: jumlahGagal, rincian });
+  } catch (err: unknown) {
+    const terjemahan = terjemahkanGalat(err);
+    return gagal(terjemahan.kode, terjemahan.pesan);
+  }
+}

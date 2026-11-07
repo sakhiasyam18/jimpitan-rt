@@ -145,3 +145,106 @@ export async function simpanSetoran(params: SimpanSetoranParams): Promise<Hasil<
     return gagal(terjemahan.kode, terjemahan.pesan);
   }
 }
+
+export interface BarisImporSetoran {
+  tanggal: string; // Format YYYY-MM-DD (Wajib hari Sabtu)
+  blok: string;
+  no_rumah: string;
+  jumlah: number;
+}
+
+export async function imporSetoranBatch(
+  daftar: BarisImporSetoran[]
+): Promise<Hasil<{ berhasil: number; gagal: number; rincian: string[] }>> {
+  try {
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return gagal('BELUM_MASUK', 'Silakan masuk dulu.');
+    }
+
+    if (!Array.isArray(daftar) || daftar.length === 0) {
+      return gagal('VALIDASI_GAGAL', 'Tidak ada data setoran untuk diimpor.');
+    }
+
+    // Ambil data warga aktif untuk memetakan (blok, no_rumah) -> warga_id
+    const { data: semuaWarga, error: wargaErr } = await supabase
+      .from('warga')
+      .select('id, blok, no_rumah');
+
+    if (wargaErr || !semuaWarga) {
+      const terjemahan = terjemahkanGalat(wargaErr);
+      return gagal(terjemahan.kode, terjemahan.pesan);
+    }
+
+    const petaWarga = new Map<string, string>();
+    for (const w of semuaWarga) {
+      const kunci = `${(w.blok || '').toUpperCase()}-${(w.no_rumah || '').trim()}`;
+      petaWarga.set(kunci, w.id);
+    }
+
+    let berhasil = 0;
+    let jumlahGagal = 0;
+    const rincian: string[] = [];
+
+    for (const item of daftar) {
+      const cleanTgl = (item.tanggal || '').trim();
+      const cleanBlok = (item.blok || '').trim().toUpperCase();
+      const cleanNo = (item.no_rumah || '').trim();
+      const jumlah = Number(item.jumlah);
+
+      if (!cleanTgl || !adalahSabtu(cleanTgl)) {
+        jumlahGagal++;
+        rincian.push(`Tanggal "${cleanTgl}" bukan hari Sabtu atau tidak valid (format: YYYY-MM-DD).`);
+        continue;
+      }
+
+      if (!adalahRupiahValid(jumlah)) {
+        jumlahGagal++;
+        rincian.push(`Jumlah Rp${jumlah} pada Blok ${cleanBlok} No ${cleanNo} tidak valid.`);
+        continue;
+      }
+
+      const kunci = `${cleanBlok}-${cleanNo}`;
+      const wargaId = petaWarga.get(kunci);
+
+      if (!wargaId) {
+        jumlahGagal++;
+        rincian.push(`Rumah Blok ${cleanBlok} No ${cleanNo} tidak ditemukan di sistem.`);
+        continue;
+      }
+
+      const { error: upsertErr } = await supabase
+        .from('setoran')
+        .upsert(
+          {
+            tanggal: cleanTgl,
+            warga_id: wargaId,
+            jumlah,
+          },
+          {
+            onConflict: 'tanggal,warga_id',
+          }
+        );
+
+      if (upsertErr) {
+        jumlahGagal++;
+        rincian.push(`Gagal simpan Blok ${cleanBlok} No ${cleanNo}: ${upsertErr.message}`);
+      } else {
+        berhasil++;
+      }
+    }
+
+    revalidatePath('/petugas');
+    revalidatePath('/');
+
+    return sukses({ berhasil, gagal: jumlahGagal, rincian });
+  } catch (err: unknown) {
+    const terjemahan = terjemahkanGalat(err);
+    return gagal(terjemahan.kode, terjemahan.pesan);
+  }
+}

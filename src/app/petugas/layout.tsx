@@ -5,11 +5,13 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/browser';
 import { keluar } from '@/actions/auth';
+import ModalPanduan from '@/components/ModalPanduan';
 
 export default function PetugasLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [namaPetugas, setNamaPetugas] = useState<string>('Petugas');
+  const [panduanTerbuka, setPanduanTerbuka] = useState<boolean>(false);
 
   useEffect(() => {
     async function ambilProfil() {
@@ -62,14 +64,30 @@ export default function PetugasLayout({ children }: { children: React.ReactNode 
             {namaPetugas}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={handleKeluar}
-          className="min-h-[56px] px-4 py-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 hover:text-white rounded-xl text-[15px] font-bold border border-slate-700 cursor-pointer flex items-center justify-center"
-        >
-          Keluar
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setPanduanTerbuka(true)}
+            className="min-h-[56px] px-3.5 py-2 bg-blue-900 hover:bg-blue-800 active:scale-95 text-white rounded-xl text-[15px] font-bold border border-blue-700 cursor-pointer flex items-center justify-center gap-1.5 shadow-xs"
+          >
+            <span>❓</span>
+            <span>Panduan</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleKeluar}
+            className="min-h-[56px] px-4 py-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 hover:text-white rounded-xl text-[15px] font-bold border border-slate-700 cursor-pointer flex items-center justify-center"
+          >
+            Keluar
+          </button>
+        </div>
       </header>
+
+      {/* Modal Panduan Petugas (Live Tutor) */}
+      <ModalPanduan
+        terbuka={panduanTerbuka}
+        onTutup={() => setPanduanTerbuka(false)}
+      />
 
       {/* Konten Halaman */}
       <div className="flex-1 pb-28">

@@ -4,11 +4,13 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { VSaldoWarga } from '@/types';
 import { daftarRumah } from '@/actions/setoran';
 import { formatTanggal } from '@/lib/format';
+import { unduhExcelLaporan, unduhCsvLaporan } from '@/lib/ekspor';
 import FilterBlok from '@/components/FilterBlok';
 import BarisRumah from '@/components/BarisRumah';
 import LayarTerimaSetoran from '@/components/LayarTerimaSetoran';
 import KotakBerhasil from '@/components/KotakBerhasil';
 import KotakGalat from '@/components/KotakGalat';
+import ModalImpor from '@/components/ModalImpor';
 
 export default function DaftarRumahPage() {
   const [daftar, setDaftar] = useState<VSaldoWarga[]>([]);
@@ -20,6 +22,9 @@ export default function DaftarRumahPage() {
   const [rumahAktif, setRumahAktif] = useState<VSaldoWarga | null>(null);
   const [lembarTerbuka, setLembarTerbuka] = useState<boolean>(false);
   const [pesanTersimpan, setPesanTersimpan] = useState<string | null>(null);
+
+  const [imporTerbuka, setImporTerbuka] = useState<boolean>(false);
+  const [menuUnduhTerbuka, setMenuUnduhTerbuka] = useState<boolean>(false);
 
   // Ambil daftar rumah dari view v_saldo_warga
   async function muatData(blok: string = blokDipilih) {
@@ -125,6 +130,59 @@ export default function DaftarRumahPage() {
             className="w-full min-h-[50px] px-4 text-[16px] sm:text-[18px] font-semibold bg-slate-50 border-2 border-slate-300 rounded-2xl focus:border-blue-950 focus:bg-white focus:outline-none"
           />
         </div>
+
+        {/* Baris Tombol Aksi: Unduh Laporan Excel & Impor Berkas */}
+        <div className="flex items-center gap-2 pt-1 relative">
+          {/* Tombol Unduh Laporan */}
+          <div className="flex-1 relative">
+            <button
+              type="button"
+              onClick={() => setMenuUnduhTerbuka((prev) => !prev)}
+              disabled={memuat || daftar.length === 0}
+              className="w-full min-h-[52px] px-3 bg-slate-100 hover:bg-slate-200 active:scale-[0.98] text-slate-800 rounded-xl font-bold text-[15px] sm:text-[16px] border border-slate-300 cursor-pointer flex items-center justify-center gap-1.5 transition"
+            >
+              <span>📥</span>
+              <span>Unduh Laporan ▾</span>
+            </button>
+
+            {menuUnduhTerbuka && (
+              <div className="absolute left-0 mt-1 w-full bg-white rounded-2xl shadow-xl border-2 border-slate-300 p-2 z-40 flex flex-col gap-1.5 animate-in fade-in">
+                <button
+                  type="button"
+                  onClick={() => {
+                    unduhExcelLaporan(daftar, tanggalSabtu);
+                    setMenuUnduhTerbuka(false);
+                  }}
+                  className="w-full text-left min-h-[52px] px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-950 font-bold text-[15px] sm:text-[16px] cursor-pointer flex items-center gap-2"
+                >
+                  <span>📊</span>
+                  <span>Unduh Berkas Excel (.xls)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    unduhCsvLaporan(daftar, tanggalSabtu);
+                    setMenuUnduhTerbuka(false);
+                  }}
+                  className="w-full text-left min-h-[52px] px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-900 font-bold text-[15px] sm:text-[16px] cursor-pointer flex items-center gap-2"
+                >
+                  <span>📄</span>
+                  <span>Unduh Berkas CSV (.csv)</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Tombol Impor Berkas */}
+          <button
+            type="button"
+            onClick={() => setImporTerbuka(true)}
+            className="flex-1 min-h-[52px] px-3 bg-blue-50 hover:bg-blue-100 active:scale-[0.98] text-blue-950 rounded-xl font-bold text-[15px] sm:text-[16px] border border-blue-200 cursor-pointer flex items-center justify-center gap-1.5 transition"
+          >
+            <span>📤</span>
+            <span>Impor Berkas</span>
+          </button>
+        </div>
       </section>
 
       {/* Konten Utama Daftar Rumah */}
@@ -156,6 +214,13 @@ export default function DaftarRumahPage() {
         terbuka={lembarTerbuka}
         onTutup={() => setLembarTerbuka(false)}
         onBerhasilSimpan={handleBerhasilSimpan}
+      />
+
+      {/* Modal Impor Berkas Excel / CSV */}
+      <ModalImpor
+        terbuka={imporTerbuka}
+        onTutup={() => setImporTerbuka(false)}
+        onSelesai={() => muatData(blokDipilih)}
       />
     </div>
   );
